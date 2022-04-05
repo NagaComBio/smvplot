@@ -10,7 +10,6 @@
 # displays the reads in a bam file around the VCF entry (+-WINDOW_SIZE).
 # Reallocation of memry works now
 import os
-import sys
 import subprocess
 import argparse
 import matplotlib
