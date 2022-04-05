@@ -1,2 +1,2 @@
 # smvplot
-smvplot is a cmd line to python tool to generate IGV-like screenshots.
+smvplot is a cmd line python tool to generate IGV-like screenshots.
