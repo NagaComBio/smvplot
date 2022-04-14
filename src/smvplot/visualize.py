@@ -70,7 +70,7 @@ class ReferenceBuffer(object):
 
 			region = "%s:%i-%i" % ( self.chromosome, pos - 1000, pos + 1000 )
 			call   = self.samtools_call + [ region ]
-			output = subprocess.check_output( call )
+			output = subprocess.check_output( call, encoding='UTF-8' )
 
 			self.offset   = max( 0, pos - 1000 )
 			self.sequence = "".join( output.split('\n')[1:] ).upper()
@@ -84,7 +84,7 @@ def get_annotations( region ):
 	if parsed_arguments.annotations:
 
 		call   = [ parsed_arguments.tabixbin, parsed_arguments.annotations, region ]
-		output = subprocess.check_output( call )
+		output = subprocess.check_output( call, encoding='UTF-8')
 
 		if not output:
 
@@ -96,7 +96,7 @@ def get_annotations( region ):
 
 				call[2] = "chr" + call[2]
 
-		output = subprocess.check_output( call )
+		output = subprocess.check_output( call, encoding='UTF-8' )
 
 		return [ [line.split('\t')[3] + "_" + str(line.split('\t')[4]), int(line.split('\t')[1]), int(line.split('\t')[2])] for line in output.split('\n') if len(line.split('\t')) >= 3 ]
 
@@ -249,6 +249,7 @@ def plot_cigars( cigars, sequences, reverses, ax, reference_function ):
 	patches = []
 
 	right_limits = [0] * len(cigars)
+	basepair_colors = { 'A':"#009600", 'C':"#3030fe", 'G':"#d17105", 'T':"#ff0000", 'N':"#00ffff" }
 
 	for cigar,sequence,reverse in zip(cigars,sequences,reverses):
 
@@ -297,10 +298,11 @@ def plot_cigars( cigars, sequences, reverses, ax, reference_function ):
 
 
 
-def  plot_region( region_chrom, region_center, region_left, region_right, plot_title ):
+def plot_region( region_chrom, region_center, region_left, region_right, plot_title ):
 
 	region_string = "%s:%i-%i" % ( region_chrom, region_left, region_right )
 	annotations = get_annotations( region_string )
+	basepair_colors = { 'A':"#009600", 'C':"#3030fe", 'G':"#d17105", 'T':"#ff0000", 'N':"#00ffff" }
 	#	print( "region %s annotations: " % region_string, annotations )
 
 	bams = [ parsed_arguments.tumor ]
@@ -349,7 +351,7 @@ def  plot_region( region_chrom, region_center, region_left, region_right, plot_t
 
 	for idx, bam in enumerate(bams):
 		samtools_call   = ( parsed_arguments.samtoolsbin, "view", "-q", "20", "-F", "3840", bam, region_string )
-		samtools_output = subprocess.check_output( samtools_call )
+		samtools_output = subprocess.check_output( samtools_call, encoding='UTF-8' )
 		samtools_output = [ line.split('\t') for line in samtools_output.split('\n') ]
 		samtools_reads = [ line for line in samtools_output if len(line) > 5 ]
 
@@ -403,11 +405,11 @@ def  plot_region( region_chrom, region_center, region_left, region_right, plot_t
 			ax[-1].barh( 0, ann[2]-ann[1]+1, height=1, left=ann[1]-0.5, color="#c8c8c8" )
 			ax[-1].text( float( ann[1] + ann[2] ) / 2.0, 0.5, ann[0], ha='center', va='center' )
 
+
 def main():
 
-	parsed_arguments = get_args()
-
-	basepair_colors = { 'A':"#009600", 'C':"#3030fe", 'G':"#d17105", 'T':"#ff0000", 'N':"#00ffff" }
+	global parsed_arguments
+	parsed_arguments = get_args()	
 
 	os.makedirs(parsed_arguments.plot_dir)
 
