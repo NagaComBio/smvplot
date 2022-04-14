@@ -10,6 +10,7 @@
 # displays the reads in a bam file around the VCF entry (+-WINDOW_SIZE).
 # Reallocation of memry works now
 import os
+import sys
 import subprocess
 import argparse
 import matplotlib
@@ -20,14 +21,16 @@ from matplotlib import gridspec
 def get_args():
 	argument_parser = argparse.ArgumentParser(
 		description='This script generates a png file for each entry in a vcf file, a bed file or a manually specified region.' )
-	argument_parser.add_argument('--control', metavar='FILE', type=str,
-			default=None, help='input bam file of the control')
-	argument_parser.add_argument('--tumor', metavar='FILE', type=str, 
-			required=True, help='input bam file of the tumor')
-	argument_parser.add_argument('--rna_tumor', metavar='FILE', action='store', nargs='?',
-			const=None, help='input bam file of the tumor RNAseq')
+	argument_parser.add_argument('--bam_paths', metavar='FILE', type=str,
+			default=None, required=True, help='input list of bam files separated by comma. Maximum 3 BAM files')
+	argument_parser.add_argument('--bam_names', metavar='STR', type=str,
+			default=None, required=True, help='input list of names separated by comma. Same length as BAM files')
 	argument_parser.add_argument('--ref', metavar='FILE', type=str,
 			required=True, help='input reference genome file (fastq format)')
+	argument_parser.add_argument('--exclude_flag', metavar='INT', type=str,
+			default='3840', required=False, help='Exclude the reads with corresponding SAM flags, [default = %(default)s]')
+	argument_parser.add_argument('--map_quality', metavar='INT', type=str,
+			default='20', required=False, help='Minimum mapping quality for the reads, [default = %(default)s]')
 	argument_parser.add_argument('--vcf', metavar='FILE', type=str,
 			default=None, help='input vcf file ( as an alternative use --bed )')
 	argument_parser.add_argument('--bed', metavar='FILE', type=str,
@@ -37,17 +40,24 @@ def get_args():
 	argument_parser.add_argument('--prefix', metavar='PREFIX', type=str,
 			default="./", help='target directory and file name prefix for generated output files')
 	argument_parser.add_argument('--window', metavar='N', type=int,
-			default=100, help='the output file for position X will show the region [X-window,X+window]')
+			default=100, help='the output file for position X will show the region [X-window,X+window], [default = %(default)d]')
 	argument_parser.add_argument('--samtoolsbin', metavar='N', type=str,
-			default="samtools", help='the path to the samtools binary, default is \'samtools\'')
+			default="samtools", help='the path to the samtools binary, [default = %(default)s]')
 	argument_parser.add_argument('--tabixbin', metavar='N', type=str,
-			default="tabix", help='the path to the tabix binary, default is \'tabix\'')
+			default="tabix", help='the path to the tabix binary, [default = %(default)s]')
 	argument_parser.add_argument('region', nargs='?', type=str,
 			default=None, help='syntax either \'chr:start-end\' or \'chr:center\', use --vcf or --bed for more convenience')
 	argument_parser.add_argument('--plot_dir', metavar='DIR', type=str,
 			default=None, help='subfolder for the pdf plots')
 
 	parsed_arguments = argument_parser.parse_args()
+
+	if len(parsed_arguments.bam_paths.split(',')) != len(parsed_arguments.bam_names.split(',')):
+		print("-"*80)
+		print("ERROR: Length of '--bam_paths' should match the length of '--bam_names'")
+		print("-"*80)
+		argument_parser.print_help()
+		sys.exit()
 
 	return(parsed_arguments)
 
@@ -305,20 +315,19 @@ def plot_region( region_chrom, region_center, region_left, region_right, plot_ti
 	basepair_colors = { 'A':"#009600", 'C':"#3030fe", 'G':"#d17105", 'T':"#ff0000", 'N':"#00ffff" }
 	#	print( "region %s annotations: " % region_string, annotations )
 
-	bams = [ parsed_arguments.tumor ]
-	if parsed_arguments.rna_tumor is not None and parsed_arguments.control is not None:
+	bam_paths = parsed_arguments.bam_paths.split(",")
+	bam_names = parsed_arguments.bam_names.split(",")
+
+	if len(bam_paths) == 3:
 		fig = plot.figure(figsize=(19.2, 16.2))
-		bams.insert(0, parsed_arguments.control)
-		bams.append(parsed_arguments.rna_tumor)
 		rows = 10
 		cols = 3
 		h_ratios = [1,5,15,2,5,15,2,5,15]
 		ax_indices = [1,2,4,5,7,8]
 		if annotations:
 			ax_indices += [10]
-	elif parsed_arguments.control is not None:
+	elif len(bam_paths) == 2:
 		fig = plot.figure(figsize=(19.2, 10.8))
-		bams.insert(0, parsed_arguments.control)
 		rows = 7
 		cols = 3
 		h_ratios = [1,5,15,2,5,15]
@@ -349,8 +358,12 @@ def plot_region( region_chrom, region_center, region_left, region_right, plot_ti
 	reference_buffer = ReferenceBuffer( parsed_arguments.ref, region_chrom )
 	visible_basepairs = [ reference_buffer[i] for i in range( region_left, region_right + 1 ) ]
 
-	for idx, bam in enumerate(bams):
-		samtools_call   = ( parsed_arguments.samtoolsbin, "view", "-q", "20", "-F", "3840", bam, region_string )
+	for idx, bam in enumerate(bam_paths):
+		samtools_call   = ( parsed_arguments.samtoolsbin, "view", 
+			"-q", parsed_arguments.map_quality, 
+			"-F", parsed_arguments.exclude_flag, bam, region_string 
+		)
+
 		samtools_output = subprocess.check_output( samtools_call, encoding='UTF-8' )
 		samtools_output = [ line.split('\t') for line in samtools_output.split('\n') ]
 		samtools_reads = [ line for line in samtools_output if len(line) > 5 ]
@@ -361,15 +374,15 @@ def plot_region( region_chrom, region_center, region_left, region_right, plot_ti
 	        	     [ bool(int(read[1])&0x10) for read in samtools_reads if read[5] != "*"  ],
 	            	 ax[idx*2+1], reference_buffer )
 
-		if len(bams) >= 2:
+		if len(bam_paths) >= 2:
 			if idx == 0:
-				ax[idx*2].set_title( "%s - control" % plot_title )
+				ax[idx*2].set_title( "%s - %s" % (plot_title, bam_names[0]) )
 			elif idx == 1:
-				ax[idx*2].set_title( "%s - tumor" % plot_title )
+				ax[idx*2].set_title( "%s - %s" % (plot_title, bam_names[1]) )
 			elif idx == 2:
-				ax[idx*2].set_title( "%s - rna_tumor " % plot_title )
+				ax[idx*2].set_title( "%s - %s" % (plot_title, bam_names[2]) )
 		else:
-			ax[idx*2].set_title( "%s - tumor" % plot_title )
+			ax[idx*2].set_title( "%s - %s" % (plot_title, bam_names[0]) )
 		ax[idx*2].set_xticks([])
 		ax[idx*2].yaxis.set_tick_params( labelleft=True, labelright=True )
 		ax[idx*2].ticklabel_format( style='plain', axis='x', useOffset=False )
@@ -411,7 +424,7 @@ def main():
 	global parsed_arguments
 	parsed_arguments = get_args()	
 
-	os.makedirs(parsed_arguments.plot_dir)
+	os.makedirs(parsed_arguments.plot_dir, exist_ok = True)
 
 	if parsed_arguments.region:
 
