@@ -17,42 +17,39 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plot
 from matplotlib import gridspec
 
+def get_args():
+	argument_parser = argparse.ArgumentParser(
+		description='This script generates a png file for each entry in a vcf file, a bed file or a manually specified region.' )
+	argument_parser.add_argument('--control', metavar='FILE', type=str,
+			default=None, help='input bam file of the control')
+	argument_parser.add_argument('--tumor', metavar='FILE', type=str, 
+			required=True, help='input bam file of the tumor')
+	argument_parser.add_argument('--rna_tumor', metavar='FILE', action='store', nargs='?',
+			const=None, help='input bam file of the tumor RNAseq')
+	argument_parser.add_argument('--ref', metavar='FILE', type=str,
+			required=True, help='input reference genome file (fastq format)')
+	argument_parser.add_argument('--vcf', metavar='FILE', type=str,
+			default=None, help='input vcf file ( as an alternative use --bed )')
+	argument_parser.add_argument('--bed', metavar='FILE', type=str,
+			default=None, help='input bed file ( as an alternative use --vcf )')
+	argument_parser.add_argument('--annotations', metavar='FILE', type=str,
+			default=None, help='annotation track indexed with tabix')
+	argument_parser.add_argument('--prefix', metavar='PREFIX', type=str,
+			default="./", help='target directory and file name prefix for generated output files')
+	argument_parser.add_argument('--window', metavar='N', type=int,
+			default=100, help='the output file for position X will show the region [X-window,X+window]')
+	argument_parser.add_argument('--samtoolsbin', metavar='N', type=str,
+			default="samtools", help='the path to the samtools binary, default is \'samtools\'')
+	argument_parser.add_argument('--tabixbin', metavar='N', type=str,
+			default="tabix", help='the path to the tabix binary, default is \'tabix\'')
+	argument_parser.add_argument('region', nargs='?', type=str,
+			default=None, help='syntax either \'chr:start-end\' or \'chr:center\', use --vcf or --bed for more convenience')
+	argument_parser.add_argument('--plot_dir', metavar='DIR', type=str,
+			default=None, help='subfolder for the pdf plots')
 
-argument_parser = argparse.ArgumentParser(
-  description='This script generates a png file for each entry in a vcf file, a bed file or a manually specified region.' )
-argument_parser.add_argument('--control', metavar='FILE', type=str,
-    default=None, help='input bam file of the control')
-argument_parser.add_argument('--tumor', metavar='FILE', type=str, 
-    required=True, help='input bam file of the tumor')
-argument_parser.add_argument('--rna_tumor', metavar='FILE', action='store', nargs='?',
-    const=None, help='input bam file of the tumor RNAseq')
-argument_parser.add_argument('--ref', metavar='FILE', type=str,
-    required=True, help='input reference genome file (fastq format)')
-argument_parser.add_argument('--vcf', metavar='FILE', type=str,
-    default=None, help='input vcf file ( as an alternative use --bed )')
-argument_parser.add_argument('--bed', metavar='FILE', type=str,
-    default=None, help='input bed file ( as an alternative use --vcf )')
-argument_parser.add_argument('--annotations', metavar='FILE', type=str,
-    default=None, help='annotation track indexed with tabix')
-argument_parser.add_argument('--prefix', metavar='PREFIX', type=str,
-    default="./", help='target directory and file name prefix for generated output files')
-argument_parser.add_argument('--window', metavar='N', type=int,
-    default=100, help='the output file for position X will show the region [X-window,X+window]')
-argument_parser.add_argument('--samtoolsbin', metavar='N', type=str,
-    default="samtools", help='the path to the samtools binary, default is \'samtools\'')
-argument_parser.add_argument('--tabixbin', metavar='N', type=str,
-    default="tabix", help='the path to the tabix binary, default is \'tabix\'')
-argument_parser.add_argument('region', nargs='?', type=str,
-    default=None, help='syntax either \'chr:start-end\' or \'chr:center\', use --vcf or --bed for more convenience')
-argument_parser.add_argument('--plot_dir', metavar='DIR', type=str,
-    default=None, help='subfolder for the pdf plots')
+	parsed_arguments = argument_parser.parse_args()
 
-parsed_arguments = argument_parser.parse_args()
-
-
-basepair_colors = { 'A':"#009600", 'C':"#3030fe", 'G':"#d17105", 'T':"#ff0000", 'N':"#00ffff" }
-
-os.makedirs(parsed_arguments.plot_dir)
+	return(parsed_arguments)
 
 class ReferenceBuffer(object):
 
@@ -406,91 +403,99 @@ def  plot_region( region_chrom, region_center, region_left, region_right, plot_t
 			ax[-1].barh( 0, ann[2]-ann[1]+1, height=1, left=ann[1]-0.5, color="#c8c8c8" )
 			ax[-1].text( float( ann[1] + ann[2] ) / 2.0, 0.5, ann[0], ha='center', va='center' )
 
+def main():
 
+	parsed_arguments = get_args()
 
-if parsed_arguments.region:
+	basepair_colors = { 'A':"#009600", 'C':"#3030fe", 'G':"#d17105", 'T':"#ff0000", 'N':"#00ffff" }
 
-	region_chrom = parsed_arguments.region.split(':')[0]
+	os.makedirs(parsed_arguments.plot_dir)
 
-	if len(parsed_arguments.region.split('-')) == 2:
+	if parsed_arguments.region:
 
-		region_left   = int(parsed_arguments.region.split(':')[1].split('-')[0])
-		region_right  = int(parsed_arguments.region.split(':')[1].split('-')[1])
-		region_center = ( region_left + region_right ) // 2
+		region_chrom = parsed_arguments.region.split(':')[0]
 
-	else:
+		if len(parsed_arguments.region.split('-')) == 2:
 
-		region_center = int(parsed_arguments.region.split(':')[1])
-		region_left   = region_center - parsed_arguments.window
-		region_right  = region_center + parsed_arguments.window
-
-	plot_title = "%s:%s" % ( region_chrom, region_center )
-
-	print(region_chrom, region_left, region_center, region_right)
-
-	plot_region( region_chrom, region_center, region_left, region_right, plot_title )
-
-	plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.pdf" %(parsed_arguments.prefix, region_chrom, region_center)))
-	plot.savefig( plot_output_file )
-	plot.clf()
-	plot.cla()
-	plot.close()
-
-
-
-if parsed_arguments.vcf:
-
-	vcf_columns = {}
-
-	for line in open(parsed_arguments.vcf, 'r' ):
-		if line[:1] == "#":
-
-			for i,col in enumerate( line[1:].rstrip('\n').split('\t') ):
-
-				vcf_columns[col] = i
-
-		elif line[:1] != "#" and "CHROM" in vcf_columns and "POS" in vcf_columns:
-
-			region_chrom  = line.split('\t')[ vcf_columns["CHROM"] ]
-			region_center = int( line.split('\t')[ vcf_columns["POS"] ] )
-			region_left   = region_center - parsed_arguments.window
-			region_right  = region_center + parsed_arguments.window
-			region_ref    = line.split('\t')[ vcf_columns["REF"] ]
-			region_alt    = line.split('\t')[ vcf_columns["ALT"] ]
-
-			plot_title = "%s:%s" % ( region_chrom, region_center )
-			plot_title += " %s>%s" % (region_ref, region_alt)
-			if "VEP_Most_Severe_Consequence" in vcf_columns and line.split('\t')[ vcf_columns["VEP_Most_Severe_Consequence"] ] != '.':
-				plot_title += " %s" % line.split('\t')[ vcf_columns["VEP_Most_Severe_Consequence"] ].replace("_", " ").rstrip('\n')            # .rstrip('\n') added to avoid new line in title
-			if "HUGO_Symbol" in vcf_columns and line.split('\t')[ vcf_columns["HUGO_Symbol"] ] != '.':
-				plot_title += " in %s" % line.split('\t')[ vcf_columns["HUGO_Symbol"] ].rstrip('\n')		# .rstrip('\n') added to avoid new line in title
-
-			plot_region( region_chrom, region_center, region_left, region_right, plot_title )
-			plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.pdf" %(parsed_arguments.prefix, region_chrom, region_center)))
-			plot.savefig( plot_output_file ) 
-			plot.clf()
-			plot.cla()
-			plot.close()
-
-
-
-if parsed_arguments.bed:
-
-	for line in open(parsed_arguments.bed, 'r' ):
-
-		if line[:1] != "#":
-
-			region_chrom  = line.split('\t')[0]
-			region_left   = int(line.split('\t')[1])
-			region_right  = int(line.split('\t')[2])
+			region_left   = int(parsed_arguments.region.split(':')[1].split('-')[0])
+			region_right  = int(parsed_arguments.region.split(':')[1].split('-')[1])
 			region_center = ( region_left + region_right ) // 2
 
-			plot_title = "%s:%s" % ( region_chrom, region_center )
+		else:
 
-			plot_region( region_chrom, region_center, region_left, region_right, plot_title )
-			plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.pdf" %(parsed_arguments.prefix, region_chrom, region_center)))
-			plot.savefig( plot_output_file ) 
-			plot.clf()
-			plot.cla()
-			plot.close()
+			region_center = int(parsed_arguments.region.split(':')[1])
+			region_left   = region_center - parsed_arguments.window
+			region_right  = region_center + parsed_arguments.window
 
+		plot_title = "%s:%s" % ( region_chrom, region_center )
+
+		print(region_chrom, region_left, region_center, region_right)
+
+		plot_region( region_chrom, region_center, region_left, region_right, plot_title )
+
+		plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.pdf" %(parsed_arguments.prefix, region_chrom, region_center)))
+		plot.savefig( plot_output_file )
+		plot.clf()
+		plot.cla()
+		plot.close()
+
+
+
+	if parsed_arguments.vcf:
+
+		vcf_columns = {}
+
+		for line in open(parsed_arguments.vcf, 'r' ):
+			if line[:1] == "#":
+
+				for i,col in enumerate( line[1:].rstrip('\n').split('\t') ):
+
+					vcf_columns[col] = i
+
+			elif line[:1] != "#" and "CHROM" in vcf_columns and "POS" in vcf_columns:
+
+				region_chrom  = line.split('\t')[ vcf_columns["CHROM"] ]
+				region_center = int( line.split('\t')[ vcf_columns["POS"] ] )
+				region_left   = region_center - parsed_arguments.window
+				region_right  = region_center + parsed_arguments.window
+				region_ref    = line.split('\t')[ vcf_columns["REF"] ]
+				region_alt    = line.split('\t')[ vcf_columns["ALT"] ]
+
+				plot_title = "%s:%s" % ( region_chrom, region_center )
+				plot_title += " %s>%s" % (region_ref, region_alt)
+				if "VEP_Most_Severe_Consequence" in vcf_columns and line.split('\t')[ vcf_columns["VEP_Most_Severe_Consequence"] ] != '.':
+					plot_title += " %s" % line.split('\t')[ vcf_columns["VEP_Most_Severe_Consequence"] ].replace("_", " ").rstrip('\n')            # .rstrip('\n') added to avoid new line in title
+				if "HUGO_Symbol" in vcf_columns and line.split('\t')[ vcf_columns["HUGO_Symbol"] ] != '.':
+					plot_title += " in %s" % line.split('\t')[ vcf_columns["HUGO_Symbol"] ].rstrip('\n')		# .rstrip('\n') added to avoid new line in title
+
+				plot_region( region_chrom, region_center, region_left, region_right, plot_title )
+				plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.pdf" %(parsed_arguments.prefix, region_chrom, region_center)))
+				plot.savefig( plot_output_file ) 
+				plot.clf()
+				plot.cla()
+				plot.close()
+
+
+
+	if parsed_arguments.bed:
+
+		for line in open(parsed_arguments.bed, 'r' ):
+
+			if line[:1] != "#":
+
+				region_chrom  = line.split('\t')[0]
+				region_left   = int(line.split('\t')[1])
+				region_right  = int(line.split('\t')[2])
+				region_center = ( region_left + region_right ) // 2
+
+				plot_title = "%s:%s" % ( region_chrom, region_center )
+
+				plot_region( region_chrom, region_center, region_left, region_right, plot_title )
+				plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.pdf" %(parsed_arguments.prefix, region_chrom, region_center)))
+				plot.savefig( plot_output_file ) 
+				plot.clf()
+				plot.cla()
+				plot.close()
+
+if __name__ == "__main__":
+	main()
