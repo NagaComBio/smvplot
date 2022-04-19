@@ -48,7 +48,10 @@ def get_args():
 	argument_parser.add_argument('region', nargs='?', type=str,
 			default=None, help='syntax either \'chr:start-end\' or \'chr:center\', use --vcf or --bed for more convenience')
 	argument_parser.add_argument('--plot_dir', metavar='DIR', type=str,
-			default=None, help='subfolder for the pdf plots')
+			default=None, help='subfolder for the plots')
+	argument_parser.add_argument('--out_format', metavar='STR', type=str,
+			default='pdf', required=False, help='Output format of the plot, [default = %(default)s]')
+
 
 	parsed_arguments = argument_parser.parse_args()
 
@@ -448,7 +451,7 @@ def main():
 
 		plot_region( region_chrom, region_center, region_left, region_right, plot_title )
 
-		plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.pdf" %(parsed_arguments.prefix, region_chrom, region_center)))
+		plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.%s" %(parsed_arguments.prefix, region_chrom, region_center, parsed_arguments.out_format)))
 		plot.savefig( plot_output_file )
 		plot.clf()
 		plot.cla()
@@ -484,7 +487,7 @@ def main():
 					plot_title += " in %s" % line.split('\t')[ vcf_columns["HUGO_Symbol"] ].rstrip('\n')		# .rstrip('\n') added to avoid new line in title
 
 				plot_region( region_chrom, region_center, region_left, region_right, plot_title )
-				plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.pdf" %(parsed_arguments.prefix, region_chrom, region_center)))
+				plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.%s" %(parsed_arguments.prefix, region_chrom, region_center, parsed_arguments.out_format)))
 				plot.savefig( plot_output_file ) 
 				plot.clf()
 				plot.cla()
@@ -506,7 +509,7 @@ def main():
 				plot_title = "%s:%s" % ( region_chrom, region_center )
 
 				plot_region( region_chrom, region_center, region_left, region_right, plot_title )
-				plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.pdf" %(parsed_arguments.prefix, region_chrom, region_center)))
+				plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.%s" %(parsed_arguments.prefix, region_chrom, region_center, parsed_arguments.out_format)))
 				plot.savefig( plot_output_file ) 
 				plot.clf()
 				plot.cla()
