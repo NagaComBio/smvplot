@@ -2,16 +2,11 @@
 smvplot is a cmd line python tool to generate IGV-like screenshots.
 
 ### Install
- - Clone the repository
-  ```
-  git clone https://github.com/NagaComBio/smvplot.git
-  ```
- - Use pip to install the local copy
-  ```
-  cd smvplot
-  pip install .
-  ```
- - Soon the package will be available via proper pip channel
+Install the package via pip
+
+```
+ pip install smvplot
+```
 
 ### Usage
 ```
