@@ -9,6 +9,7 @@
 # This script generates a png file for each entry in a VCF file. The file
 # displays the reads in a bam file around the VCF entry (+-WINDOW_SIZE).
 # Reallocation of memry works now
+from cmath import e
 import os
 import sys
 import subprocess
@@ -18,10 +19,24 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plot
 from matplotlib import gridspec
 
+# Optional dependencies
+try:
+    import pysam
+except ModuleNotFoundError:
+    # Handle the case when pysam is not installed
+    print("pysam is not installed. Please install it for VAF annotation.")
+
+try:
+    import pysamstats
+except ModuleNotFoundError:
+    # Handle the case when pysamstats is not installed
+    print("pysamstats is not installed. Please install it for VAF annotation.")
+
+
 def get_args():
 	argument_parser = argparse.ArgumentParser(
 		description='This script generates a png file for each entry in a vcf file, a bed file or a manually specified region.' )
-	argument_parser.add_argument('--bam_paths', metavar='FILE', type=str,
+	argument_parser.add_argument('--bam_paths', metavar='STR', type=str,
 			default=None, required=True, help='input list of bam files separated by comma. Maximum 3 BAM files')
 	argument_parser.add_argument('--bam_names', metavar='STR', type=str,
 			default=None, required=True, help='input list of names separated by comma. Same length as BAM files')
@@ -29,8 +44,12 @@ def get_args():
 			required=True, help='input reference genome file (fastq format)')
 	argument_parser.add_argument('--exclude_flag', metavar='INT', type=str,
 			default='3840', required=False, help='Exclude the reads with corresponding SAM flags, [default = %(default)s]')
-	argument_parser.add_argument('--map_quality', metavar='INT', type=str,
+	argument_parser.add_argument('--map_quality', metavar='INT', type=int,
 			default='20', required=False, help='Minimum mapping quality for the reads, [default = %(default)s]')
+	argument_parser.add_argument('--base_quality', metavar='INT', type=int,
+			default='13', required=False, help='Minimum base quality for the variant, [default = %(default)s]')
+	argument_parser.add_argument('--vaf', action='store_true',
+			help='Include the VAF of the central position in the plot title. Requires reference genome')
 	argument_parser.add_argument('--vcf', metavar='FILE', type=str,
 			default=None, help='input vcf file ( as an alternative use --bed )')
 	argument_parser.add_argument('--bed', metavar='FILE', type=str,
@@ -81,15 +100,76 @@ class ReferenceBuffer(object):
 
 		else:
 
-			region = "%s:%i-%i" % ( self.chromosome, pos - 1000, pos + 1000 )
-			call   = self.samtools_call + [ region ]
-			output = subprocess.check_output( call, encoding='UTF-8' )
+			# To accomodate the smaller contigs
+			try:
+				region = "%s:%i-%i" % ( self.chromosome, pos - 1000, pos + 1000 )
+				call   = self.samtools_call + [ region ]
+				output = subprocess.check_output( call, encoding='UTF-8' )
+				self.sequence = "".join( output.split('\n')[1:] ).upper()
+				self.offset   = max( 0, pos - 1000 )
+			except:
+					region = self.chromosome
+					call   = self.samtools_call + [ region ]
+					output = subprocess.check_output( call, encoding='UTF-8' )
+					self.sequence = "".join( output.split('\n')[1:] ).upper()
+					self.offset = 1
 
-			self.offset   = max( 0, pos - 1000 )
-			self.sequence = "".join( output.split('\n')[1:] ).upper()
+			if pos - self.offset >= len(self.sequence):
+				return "N"
+			else:
+				return self.sequence[ pos - self.offset ]
 
-			return self.sequence[ pos - self.offset ]
 
+def variation_af(bam, chr, pos, map_quality, base_quality):
+	"""Calculate the allele frequency of a variant in a set of BAM files.
+
+	Args:
+		bams (list): List of BAM files.
+		chr (str): Chromosome.
+		pos (int): Position.
+
+	Returns:
+		float: Allele frequency.
+	"""
+
+	# Iterate over the BAM files
+
+	pos_zero = pos - 1
+
+	variant_info = pysamstats.load_variation(bam,
+					  chrom = chr,
+						start = pos_zero,
+						end = pos,
+						fafile = parsed_arguments.ref,
+						min_mapq = map_quality,
+						min_baseq = base_quality)
+
+	# variant info details from pysamstats out
+	# REF to https://github.com/alimanfoo/pysamstats/blob/2e0980933494d9ce71639eed8c739ce9c9aa4617/pysamstats/opt.pyx#L515
+
+	# Iterate over the list and tuple[1] == pos_zero
+	variant_info_zero = [v for v in variant_info if v[1] == pos_zero][0]
+
+	# ref coverage count
+	read_count_ref = variant_info_zero[5]
+	read_count_alt = 0
+
+	# If it a mismatch
+	if variant_info_zero[7] > 0:
+		read_count_alt = variant_info_zero[7]
+	# If it is an insertion
+	elif variant_info_zero[11] > 0:
+		read_count_alt = variant_info_zero[11]
+	# A deletion
+	else:
+		# Check the next position
+		variant_info_one = [v for v in variant_info if v[1] == pos][0]
+		if variant_info_one[9] > 0:
+			read_count_alt = variant_info_one[9]
+
+	variant_af = float(read_count_alt) / (read_count_ref + read_count_alt)
+
+	return variant_af
 
 
 def get_annotations( region ):
@@ -355,16 +435,16 @@ def plot_region( region_chrom, region_center, region_left, region_right, plot_ti
 	grid = gridspec.GridSpec( rows, cols, height_ratios=h_ratios, hspace=0,
 							width_ratios=[1,42,1], wspace=0,
 							left=0, right=1, bottom=0, top=1 )
-	
+
 	ax = [ plot.subplot( grid[i,1] ) for i in ax_indices ]
 
 	reference_buffer = ReferenceBuffer( parsed_arguments.ref, region_chrom )
 	visible_basepairs = [ reference_buffer[i] for i in range( region_left, region_right + 1 ) ]
 
 	for idx, bam in enumerate(bam_paths):
-		samtools_call   = ( parsed_arguments.samtoolsbin, "view", 
-			"-q", parsed_arguments.map_quality, 
-			"-F", parsed_arguments.exclude_flag, bam, region_string 
+		samtools_call   = ( parsed_arguments.samtoolsbin, "view",
+			"-q", str(parsed_arguments.map_quality),
+			"-F", parsed_arguments.exclude_flag, bam, region_string
 		)
 
 		samtools_output = subprocess.check_output( samtools_call, encoding='UTF-8' )
@@ -377,15 +457,21 @@ def plot_region( region_chrom, region_center, region_left, region_right, plot_ti
 	        	     [ bool(int(read[1])&0x10) for read in samtools_reads if read[5] != "*"  ],
 	            	 ax[idx*2+1], reference_buffer )
 
+		# Add VAF to the title
+		plot_title_vaf = plot_title
+		if parsed_arguments.vaf:
+			vaf = variation_af( bam, region_chrom, region_center, parsed_arguments.map_quality, parsed_arguments.base_quality)
+			plot_title_vaf = "%s - VAF=%s" % (plot_title, str(vaf))
+
 		if len(bam_paths) >= 2:
 			if idx == 0:
-				ax[idx*2].set_title( "%s - %s" % (plot_title, bam_names[0]) )
+				ax[idx*2].set_title( "%s - %s" % (plot_title_vaf, bam_names[0]) )
 			elif idx == 1:
-				ax[idx*2].set_title( "%s - %s" % (plot_title, bam_names[1]) )
+				ax[idx*2].set_title( "%s - %s" % (plot_title_vaf, bam_names[1]) )
 			elif idx == 2:
-				ax[idx*2].set_title( "%s - %s" % (plot_title, bam_names[2]) )
+				ax[idx*2].set_title( "%s - %s" % (plot_title_vaf, bam_names[2]) )
 		else:
-			ax[idx*2].set_title( "%s - %s" % (plot_title, bam_names[0]) )
+			ax[idx*2].set_title( "%s - %s" % (plot_title_vaf, bam_names[0]) )
 		ax[idx*2].set_xticks([])
 		ax[idx*2].yaxis.set_tick_params( labelleft=True, labelright=True )
 		ax[idx*2].ticklabel_format( style='plain', axis='x', useOffset=False )
@@ -425,23 +511,23 @@ def plot_region( region_chrom, region_center, region_left, region_right, plot_ti
 def main():
 
 	global parsed_arguments
-	parsed_arguments = get_args()	
+	parsed_arguments = get_args()
 
 	os.makedirs(parsed_arguments.plot_dir, exist_ok = True)
 
 	if parsed_arguments.region:
 
-		region_chrom = parsed_arguments.region.split(':')[0]
+		region_chrom = ':'.join(parsed_arguments.region.split(':')[:-1])
 
-		if len(parsed_arguments.region.split('-')) == 2:
+		if len(parsed_arguments.region.split(':')[-1].split('-')) == 2:
 
-			region_left   = int(parsed_arguments.region.split(':')[1].split('-')[0])
-			region_right  = int(parsed_arguments.region.split(':')[1].split('-')[1])
+			region_left   = int(parsed_arguments.region.split(':')[-1].split('-')[0])
+			region_right  = int(parsed_arguments.region.split(':')[-1].split('-')[1])
 			region_center = ( region_left + region_right ) // 2
 
 		else:
 
-			region_center = int(parsed_arguments.region.split(':')[1])
+			region_center = int(parsed_arguments.region.split(':')[-1])
 			region_left   = region_center - parsed_arguments.window
 			region_right  = region_center + parsed_arguments.window
 
@@ -488,7 +574,7 @@ def main():
 
 				plot_region( region_chrom, region_center, region_left, region_right, plot_title )
 				plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.%s" %(parsed_arguments.prefix, region_chrom, region_center, parsed_arguments.out_format)))
-				plot.savefig( plot_output_file ) 
+				plot.savefig( plot_output_file )
 				plot.clf()
 				plot.cla()
 				plot.close()
@@ -510,7 +596,7 @@ def main():
 
 				plot_region( region_chrom, region_center, region_left, region_right, plot_title )
 				plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.%s" %(parsed_arguments.prefix, region_chrom, region_center, parsed_arguments.out_format)))
-				plot.savefig( plot_output_file ) 
+				plot.savefig( plot_output_file )
 				plot.clf()
 				plot.cla()
 				plot.close()
