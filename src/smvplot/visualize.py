@@ -57,7 +57,7 @@ def get_args():
 	argument_parser.add_argument('--annotations', metavar='FILE', type=str,
 			default=None, help='annotation track indexed with tabix')
 	argument_parser.add_argument('--prefix', metavar='PREFIX', type=str,
-			default="./", help='target directory and file name prefix for generated output files')
+			default="smvplot", help='target directory and file name prefix for generated output files, [default = %(default)s]')
 	argument_parser.add_argument('--window', metavar='N', type=int,
 			default=100, help='the output file for position X will show the region [X-window,X+window], [default = %(default)d]')
 	argument_parser.add_argument('--samtoolsbin', metavar='N', type=str,
@@ -67,7 +67,7 @@ def get_args():
 	argument_parser.add_argument('region', nargs='?', type=str,
 			default=None, help='syntax either \'chr:start-end\' or \'chr:center\', use --vcf or --bed for more convenience')
 	argument_parser.add_argument('--plot_dir', metavar='DIR', type=str,
-			default=None, help='subfolder for the plots')
+			default="./", help='subfolder for the plots')
 	argument_parser.add_argument('--out_format', metavar='STR', type=str,
 			default='pdf', required=False, help='Output format of the plot, [default = %(default)s]')
 
