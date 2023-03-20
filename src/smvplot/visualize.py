@@ -148,27 +148,40 @@ def variation_af(bam, chr, pos, map_quality, base_quality):
 	# REF to https://github.com/alimanfoo/pysamstats/blob/2e0980933494d9ce71639eed8c739ce9c9aa4617/pysamstats/opt.pyx#L515
 
 	# Iterate over the list and tuple[1] == pos_zero
-	variant_info_zero = [v for v in variant_info if v[1] == pos_zero][0]
+	try:
+		variant_info_zero = [v for v in variant_info if v[1] == pos_zero][0]
+	except:
+		variant_info_zero = None
+		Warning("No read support at position %s:%s in the %s BAM file" % (chr, pos, bam))
 
-	# ref coverage count
-	read_count_ref = variant_info_zero[5]
+	read_count_ref = 0
 	read_count_alt = 0
 
-	# If it a mismatch
-	if variant_info_zero[7] > 0:
-		read_count_alt = variant_info_zero[7]
-	# If it is an insertion
-	elif variant_info_zero[11] > 0:
-		read_count_alt = variant_info_zero[11]
-	# A deletion
-	else:
-		# Check the next position
-		variant_info_one = [v for v in variant_info if v[1] == pos][0]
-		if variant_info_one[9] > 0:
-			read_count_alt = variant_info_one[9]
+	if variant_info_zero is not None:
+		# ref coverage count
+		read_count_ref = variant_info_zero[5]
 
-	variant_af = float(read_count_alt) / (read_count_ref + read_count_alt)
+		# If it a mismatch
+		if variant_info_zero[7] > 0:
+			read_count_alt = variant_info_zero[7]
+		# If it is an insertion
+		elif variant_info_zero[11] > 0:
+			read_count_alt = variant_info_zero[11]
+		# A deletion
+		else:
+			# Check the next position
+			try:
+				variant_info_one = [v for v in variant_info if v[1] == pos][0]
+			except:
+				variant_info_one = None
+				Warning("No read support at position %s:%s in the %s BAM file" % (chr, pos, bam))
 
+			if variant_info_one is not None:
+				if variant_info_one[9] > 0:
+					read_count_ref = variant_info_one[5]
+					read_count_alt = variant_info_one[9]
+
+	variant_af = float(read_count_alt) / (read_count_ref + read_count_alt) if (read_count_ref + read_count_alt) > 0 else 0.0
 	return variant_af
 
 
