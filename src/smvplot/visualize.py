@@ -220,7 +220,9 @@ def parse_cigar( cigar, pos, r_left, r_right):
 	r_right = r_right + 10
 
 	for char in cigar:
-
+		# If the char is a number(in str form), add it to the last number as string
+		# If the char is a letter, then convert the last number to int and add the letter
+		# This cycle completes lenght of the cigar and the type of the cigar
 		if "0" <= char <= "9":
 
 			if type(cigar_struct[-1][0]) != str:
@@ -241,13 +243,16 @@ def parse_cigar( cigar, pos, r_left, r_right):
 	abs_pos = pos
 	rel_pos = 0
 
+	# If the first cigar is soft clipped, then the absolute position is shifted
 	if cigar_struct[0][1] == 'S':
 		abs_pos -= cigar_struct[0][0]
 
 	cigar_struct2 = []
 
+	# Iterate over the cigar structure
 	for n,t in cigar_struct:
-
+		
+		# If the cigar is a match or a soft clipped, then add the position to the list
 		if t in ['M','S']:
 
 			for m in range(n):
@@ -275,11 +280,11 @@ def parse_cigar( cigar, pos, r_left, r_right):
 
 			rel_pos += n
 
-		elif t == "N":
-			for m in range(1, n):
+		elif t == "N":			
+			for m in range(n):
 				if r_left <= abs_pos+m <= r_right:
 					cigar_struct2.append((t, abs_pos+m, rel_pos))
-			abs_pos +=n
+			abs_pos += n
 
 	return cigar_struct2
 
@@ -337,11 +342,11 @@ def plot_histogram( cigars, ax, ax_id):
 
 
 	original_x         = range( min_unclipped, max_unclipped + 1 )
-	subdivided_x       = [ a+b for a in original_x for b in [-0.33,0.33]][1:-2]
+	subdivided_x       = [ a+b for a in original_x for b in [-0.33,0.33]]
 
-	smooth_unclipped = [ x for x in histogram_unclipped for y in [0,1] ][1:-2]
-	smooth_clipped   = [ x for x in histogram_clipped for y in [0,1] ][1:-2]
-	smooth_deleted   = [ x for x in histogram_deleted for y in [0,1] ][1:-2]
+	smooth_unclipped = [ x for x in histogram_unclipped for y in [0,1] ]
+	smooth_clipped   = [ x for x in histogram_clipped for y in [0,1] ]
+	smooth_deleted   = [ x for x in histogram_deleted for y in [0,1] ]
 
 	ax.fill_between( subdivided_x, 0, smooth_unclipped, color=hist_color_codes[0] )
 	ax.fill_between( subdivided_x, 0, smooth_clipped, color=hist_color_codes[1] )

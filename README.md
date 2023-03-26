@@ -82,6 +82,15 @@ smvplot \
   --out_format png \
   --vcf giab_benchmark_variants.vcf # --bed giab_benchmark_variants.vcf
 ```
+### Log changes
+
+- Removed the underhand issue in the RNAseq histograms
+
+**0.0.2**
+- Add VAF to the title via pysamstats
+
+**0.0.1**
+- Inital version upload to the PIP 
 
 ### Acknowledgements
 The `visualize.py` was originally written for the [DKFZ somatic indel workflow](https://github.com/DKFZ-ODCF/IndelCallingWorkflow) by Philip Ginsbach and Ivo Buchhalter. Here I have updated script to a python package and added a possibility of a third BAM and a RNAseq BAM file. And also generalized the BAM inputs.
