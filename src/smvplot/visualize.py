@@ -81,6 +81,28 @@ def get_args():
 		argument_parser.print_help()
 		sys.exit()
 
+	# check if the BAM files exit in the system, else remove the names from bam_names
+	bam_paths = parsed_arguments.bam_paths.split(',')
+	bam_names = parsed_arguments.bam_names.split(',')
+
+	bam_paths_new, bam_names_new = [], []
+
+	for path, name in zip(bam_paths, bam_names):
+			if os.path.isfile(path):
+					bam_paths_new.append(path)
+					bam_names_new.append(name)
+			else:
+					print(f"WARNING: BAM file not found: {path}")
+
+	if len(bam_paths_new) == 0:
+			print("-"*80)
+			print("ERROR: No BAM files found")
+			print("-"*80)
+			argument_parser.print_help()
+			sys.exit()
+	parsed_arguments.bam_paths = ','.join(bam_paths_new)
+	parsed_arguments.bam_names = ','.join(bam_names_new)
+
 	return(parsed_arguments)
 
 class ReferenceBuffer(object):
@@ -479,6 +501,8 @@ def plot_region( region_chrom, region_center, region_left, region_right, plot_ti
 		plot_title_vaf = plot_title
 		if parsed_arguments.vaf:
 			vaf = variation_af( bam, region_chrom, region_center, parsed_arguments.map_quality, parsed_arguments.base_quality)
+			# limit the number of decimal places
+			vaf = round(vaf, 4)
 			plot_title_vaf = "%s - VAF=%s" % (plot_title, str(vaf))
 
 		if len(bam_paths) >= 2:
@@ -568,14 +592,13 @@ def main():
 		vcf_columns = {}
 
 		for line in open(parsed_arguments.vcf, 'r' ):
+			line = line.rstrip('\n')
+
 			if line[:1] == "#":
-
 				for i,col in enumerate( line[1:].rstrip('\n').split('\t') ):
-
 					vcf_columns[col] = i
 
 			elif line[:1] != "#" and "CHROM" in vcf_columns and "POS" in vcf_columns:
-
 				region_chrom  = line.split('\t')[ vcf_columns["CHROM"] ]
 				region_center = int( line.split('\t')[ vcf_columns["POS"] ] )
 				region_left   = region_center - parsed_arguments.window

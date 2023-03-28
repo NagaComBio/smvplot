@@ -82,9 +82,12 @@ smvplot \
   --out_format png \
   --vcf giab_benchmark_variants.vcf # --bed giab_benchmark_variants.vcf
 ```
-### Log changes
+### Changelog
 
+**0.0.3**
 - Removed the underhand issue in the RNAseq histograms
+- Limit the VAF float decimals
+- In a multi-BAM settings, ignore the BAMs if the path does not exist
 
 **0.0.2**
 - Add VAF to the title via pysamstats
