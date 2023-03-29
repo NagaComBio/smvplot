@@ -84,6 +84,9 @@ smvplot \
 ```
 ### Changelog
 
+**0.0.3.2**
+- Minor bug fixes
+
 **0.0.3**
 - Removed the underhand issue in the RNAseq histograms
 - Limit the VAF float decimals

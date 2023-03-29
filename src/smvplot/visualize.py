@@ -88,11 +88,11 @@ def get_args():
 	bam_paths_new, bam_names_new = [], []
 
 	for path, name in zip(bam_paths, bam_names):
-			if os.path.isfile(path):
+			if path[-3:] == 'bam' or path[-4:] == 'cram':
 					bam_paths_new.append(path)
 					bam_names_new.append(name)
 			else:
-					print(f"WARNING: BAM file not found: {path}")
+					print(f"WARNING: BAM file {path} does not end with '.bam' or '.cram'")
 
 	if len(bam_paths_new) == 0:
 			print("-"*80)
