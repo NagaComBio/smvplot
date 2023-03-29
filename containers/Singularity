@@ -1,0 +1,18 @@
+Bootstrap: docker
+From: mambaorg/micromamba
+
+%labels
+    smvplot="An IGV-like screenshot of small variants from SAM or BAM file"
+
+%environment
+    export C_INCLUDE_PATH=/usr/local/include
+    export LIBRARY_PATH=/usr/local/lib
+    export LD_LIBRARY_PATH=/usr/local/lib
+    export PATH=$PATH:/opt/conda/bin/
+
+%files
+    smvplot.yaml /opt
+
+%post
+    micromamba install -y -n base -f /opt/smvplot.yaml && \
+      micromamba clean --all --yes
