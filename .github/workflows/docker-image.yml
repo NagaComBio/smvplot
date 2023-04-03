@@ -17,7 +17,7 @@ jobs:
         with:
           context: .
           file: Dockerfile
-          repository: my-image
+          repository: nagarajanp/smvplot
           tags: |
             latest
             ${{ github.ref }}
