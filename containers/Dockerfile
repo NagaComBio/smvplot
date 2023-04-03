@@ -7,8 +7,10 @@ ENV LIBRARY_PATH=/usr/local/lib
 ENV LD_LIBRARY_PATH=/usr/local/lib
 ENV PATH=$PATH:/opt/conda/bin/
 
-COPY containers/smvplot.yaml /opt/
+WORKDIR /opt
+COPY . /opt
 
-RUN micromamba install -y -n base -f /opt/smvplot.yaml \
+RUN micromamba install -y -n base -f /opt/containers/smvplot.yaml \
     && micromamba clean --all --yes
 
+RUN python setup.py install
