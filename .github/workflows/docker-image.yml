@@ -17,7 +17,7 @@ jobs:
         with:
           dockerfile: containers/Dockerfile
           image: nagarajanp/smvplot
-          tags: latest, ${{ github.ref }}
+          tags: latest, ${{ github.ref_name }}
 
           registry: docker.io
           username: ${{ secrets.DOCKER_USERNAME }}
