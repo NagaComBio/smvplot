@@ -3,7 +3,7 @@ FROM mambaorg/micromamba
 LABEL smvplot="An IGV-like screenshot of small variants from SAM or BAM file"
 
 USER root
-RUN useradd --shell /bin/bash smvplot
+RUN useradd smvplot
 RUN mkdir /build && chown smvplot:smvplot /build
 USER smvplot
 
