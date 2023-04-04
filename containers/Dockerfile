@@ -2,17 +2,22 @@ FROM mambaorg/micromamba
 
 LABEL smvplot="An IGV-like screenshot of small variants from SAM or BAM file"
 
+USER root
+RUN useradd --shell /bin/bash smvplot
+RUN mkdir /build && chown smvplot:smvplot /build
+USER smvplot
+
 ENV C_INCLUDE_PATH=/usr/local/include
 ENV LIBRARY_PATH=/usr/local/lib
 ENV LD_LIBRARY_PATH=/usr/local/lib
 ENV PATH=$PATH:/opt/conda/bin/
 
-WORKDIR /opt
-COPY . /opt
+WORKDIR /build
+COPY --chown=smvplot:smvplot . /build
 
-RUN micromamba install -y -n base -f /opt/containers/smvplot.yaml \
+RUN micromamba install -y -n base -f /build/containers/smvplot.yaml \
     && micromamba clean --all --yes
 
-RUN python -m build && pip install dist/*tar.gz
+RUN python -m build && pip install --user dist/*tar.gz
 
 ENTRYPOINT ["smvplot"]
