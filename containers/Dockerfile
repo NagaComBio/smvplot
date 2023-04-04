@@ -10,7 +10,7 @@ USER smvplot
 ENV C_INCLUDE_PATH=/usr/local/include
 ENV LIBRARY_PATH=/usr/local/lib
 ENV LD_LIBRARY_PATH=/usr/local/lib
-ENV PATH=$PATH:/opt/conda/bin/
+ENV PATH=$PATH:/build/conda/bin/
 
 WORKDIR /build
 COPY --chown=smvplot:smvplot . /build
