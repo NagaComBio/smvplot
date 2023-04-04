@@ -3,6 +3,7 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
+  - build
   - htslib==1.13.0
   - samtools==1.13.0
   - bcftools==1.8.0
