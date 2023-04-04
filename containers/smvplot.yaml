@@ -4,6 +4,7 @@ channels:
   - bioconda
 dependencies:
   - build
+  - python>=3.6
   - htslib==1.13.0
   - samtools==1.13.0
   - bcftools==1.8.0

@@ -10,7 +10,7 @@ USER smvplot
 ENV C_INCLUDE_PATH=/usr/local/include
 ENV LIBRARY_PATH=/usr/local/lib
 ENV LD_LIBRARY_PATH=/usr/local/lib
-ENV PATH=$PATH:/build/conda/bin/
+ENV PATH=$PATH:/opt/conda/bin/
 
 WORKDIR /build
 COPY --chown=smvplot:smvplot . /build
@@ -18,6 +18,4 @@ COPY --chown=smvplot:smvplot . /build
 RUN micromamba install -y -n base -f /build/containers/smvplot.yaml \
     && micromamba clean --all --yes
 
-RUN python3 -m build && pip install --user dist/*tar.gz
-
-ENTRYPOINT ["smvplot"]
+RUN python -m build && pip install dist/*tar.gz
