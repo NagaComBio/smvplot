@@ -13,6 +13,6 @@ COPY . /opt
 RUN micromamba install -y -n base -f /opt/containers/smvplot.yaml \
     && micromamba clean --all --yes
 
-RUN python -m build && pip install dist/*.whl
+RUN python -m build && pip install dist/*tar.gz
 
 ENTRYPOINT ["smvplot"]
