@@ -14,6 +14,7 @@ import os
 import sys
 import subprocess
 import argparse
+import random
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plot
@@ -48,6 +49,8 @@ def get_args():
 			default='20', required=False, help='Minimum mapping quality for the reads, [default = %(default)s]')
 	argument_parser.add_argument('--base_quality', metavar='INT', type=int,
 			default='13', required=False, help='Minimum base quality for the variant, [default = %(default)s]')
+	argument_parser.add_argument('--max_depth_plot', metavar='INT', type=int,
+			default='500', required=False, help='Maximum read depth used to plot the high coverage region, [default = %(default)s]')
 	argument_parser.add_argument('--vaf', action='store_true',
 			help='Include the VAF of the central position in the plot title. Requires reference genome')
 	argument_parser.add_argument('--vcf', metavar='FILE', type=str,
@@ -491,10 +494,24 @@ def plot_region( region_chrom, region_center, region_left, region_right, plot_ti
 		samtools_output = [ line.split('\t') for line in samtools_output.split('\n') ]
 		samtools_reads = [ line for line in samtools_output if len(line) > 5 ]
 
-		plot_histogram( [ parse_cigar( read[5], int(read[3]), region_left, region_right) for read in samtools_reads if read[5] != "*" ], ax[idx*2], idx )
-		plot_cigars( [ parse_cigar( read[5], int(read[3]),region_left, region_right ) for read in samtools_reads if read[5] != "*"  ],
-	    	         [ read[9] for read in samtools_reads if read[5] != "*"  ],
-	        	     [ bool(int(read[1])&0x10) for read in samtools_reads if read[5] != "*"  ],
+		region_read_counts = len(samtools_reads)
+		if region_read_counts > parsed_arguments.max_depth_plot:
+			print("Warning: too many reads in region %s, %s reads" % (region_string, region_read_counts) )
+			print("Warning: Taking a random of %s reads for plotting and histogram is still based on the oringianl counts" % parsed_arguments.max_depth_plot)
+			random_indices = random.sample(range(region_read_counts), parsed_arguments.max_depth_plot)
+			samtools_reads_r = [ samtools_reads[i] for i in sorted(random_indices) ]
+
+			samtools_read_plot = samtools_reads_r
+			samtools_read_hist = samtools_reads
+		else:
+			samtools_read_plot = samtools_reads
+			samtools_read_hist = samtools_reads
+
+
+		plot_histogram( [ parse_cigar( read[5], int(read[3]), region_left, region_right) for read in samtools_read_hist if read[5] != "*" ], ax[idx*2], idx )
+		plot_cigars( [ parse_cigar( read[5], int(read[3]),region_left, region_right ) for read in samtools_read_plot if read[5] != "*"  ],
+	    	         [ read[9] for read in samtools_read_plot if read[5] != "*"  ],
+	        	     [ bool(int(read[1])&0x10) for read in samtools_read_plot if read[5] != "*"  ],
 	            	 ax[idx*2+1], reference_buffer )
 
 		# Add VAF to the title

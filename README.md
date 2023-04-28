@@ -11,33 +11,34 @@ Install the package via pip
 ### Usage
 ```
 $ smvplot --help
-usage: smvplot [-h] --bam_paths FILE --bam_names STR --ref FILE [--exclude_flag INT] [--map_quality INT] [--vcf FILE] [--bed FILE] [--annotations FILE] [--prefix PREFIX] [--window N] [--samtoolsbin N] [--tabixbin N]
-               [--plot_dir DIR]
+usage: smvplot [-h] --bam_paths STR --bam_names STR --ref FILE [--exclude_flag INT] [--map_quality INT] [--base_quality INT] [--max_depth_plot INT] [--vaf] [--vcf FILE] [--bed FILE]
+               [--annotations FILE] [--prefix PREFIX] [--window N] [--samtoolsbin N] [--tabixbin N] [--plot_dir DIR] [--out_format STR]
                [region]
 
-`smvplot` creates IGV-like screenshot for each variant in a vcf file, a bed file or a manually specified region.
+This script generates a png file for each entry in a vcf file, a bed file or a manually specified region.
 
 positional arguments:
-  region              syntax either 'chr:start-end' or 'chr:center', use --vcf or --bed for more convenience
+  region                syntax either 'chr:start-end' or 'chr:center', use --vcf or --bed for more convenience
 
 optional arguments:
-  -h, --help          show this help message and exit
-  --bam_paths STR     Input list of BAM files separated by comma. Maximum 3 BAM files
-  --bam_names STR     Input list of names separated by comma. Same length as BAM files
-  --ref FILE          input reference genome file (fastq format)
-  --exclude_flag INT  Exclude the reads with corresponding SAM flags, [default = 3840]
-  --map_quality INT   Minimum mapping quality for the reads, [default = 20]
-  --base_quality INT  Minimum base quality for the variant, [default = 13]
-  --vaf               Include the VAF of the central position in the plot title. Requires reference genome
-  --vcf FILE          input vcf file ( as an alternative use --bed )
-  --bed FILE          input bed file ( as an alternative use --vcf )
-  --annotations FILE  annotation track indexed with tabix
-  --prefix PREFIX     target directory and file name prefix for generated output files
-  --window N          the output file for position X will show the region [X-window,X+window], [default = 100]
-  --samtoolsbin N     the path to the samtools binary, [default = samtools]
-  --tabixbin N        the path to the tabix binary, [default = tabix]
-  --plot_dir DIR      subfolder for the plots
-  --out_format STR    Output format of the plot, [default = pdf]
+  -h, --help            show this help message and exit
+  --bam_paths STR       input list of bam files separated by comma. Maximum 3 BAM files
+  --bam_names STR       input list of names separated by comma. Same length as BAM files
+  --ref FILE            input reference genome file (fastq format)
+  --exclude_flag INT    Exclude the reads with corresponding SAM flags, [default = 3840]
+  --map_quality INT     Minimum mapping quality for the reads, [default = 20]
+  --base_quality INT    Minimum base quality for the variant, [default = 13]
+  --max_depth_plot INT  Maximum read depth used to plot the high coverage region, [default = 500]
+  --vaf                 Include the VAF of the central position in the plot title. Requires reference genome
+  --vcf FILE            input vcf file ( as an alternative use --bed )
+  --bed FILE            input bed file ( as an alternative use --vcf )
+  --annotations FILE    annotation track indexed with tabix
+  --prefix PREFIX       target directory and file name prefix for generated output files, [default = smvplot]
+  --window N            the output file for position X will show the region [X-window,X+window], [default = 100]
+  --samtoolsbin N       the path to the samtools binary, [default = samtools]
+  --tabixbin N          the path to the tabix binary, [default = tabix]
+  --plot_dir DIR        subfolder for the plots
+  --out_format STR      Output format of the plot, [default = pdf]
 ```
 
 ### Example plots
