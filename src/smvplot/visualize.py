@@ -53,6 +53,8 @@ def get_args():
 			default='500', required=False, help='Maximum read depth used to plot the high coverage region, [default = %(default)s]')
 	argument_parser.add_argument('--vaf', action='store_true',
 			help='Include the VAF of the central position in the plot title. Requires reference genome')
+	argument_parser.add_argument('--for_gSmVs', action='store_true',
+			help='For the gSmVs workflow used internally in DKFZ, the VAFs are directly sourced from the input VCF.')
 	argument_parser.add_argument('--vcf', metavar='FILE', type=str,
 			default=None, help='input vcf file ( as an alternative use --bed )')
 	argument_parser.add_argument('--bed', metavar='FILE', type=str,
@@ -435,7 +437,7 @@ def plot_cigars( cigars, sequences, reverses, ax, reference_function ):
 
 
 
-def plot_region( region_chrom, region_center, region_left, region_right, plot_title ):
+def plot_region( region_chrom, region_center, region_left, region_right, plot_title, VAFs ):
 
 	region_string = "%s:%i-%i" % ( region_chrom, region_left, region_right )
 	annotations = get_annotations( region_string )
@@ -518,10 +520,17 @@ def plot_region( region_chrom, region_center, region_left, region_right, plot_ti
 		# Add VAF to the title
 		plot_title_vaf = plot_title
 		if parsed_arguments.vaf:
-			vaf = variation_af( bam, region_chrom, region_center, parsed_arguments.map_quality, parsed_arguments.base_quality)
-			# limit the number of decimal places
-			vaf = round(vaf, 4)
-			plot_title_vaf = "%s - VAF=%s" % (plot_title, str(vaf))
+			if parsed_arguments.for_gSmVs:
+				if VAFs[idx] == ".":
+					VAFs[idx] = "0.0"
+				else:
+					VAFs[idx] = str(round(float(VAFs[idx]), 4))
+				plot_title_vaf = "%s - VAF=%s" % (plot_title, VAFs[idx])
+			else:
+				vaf = variation_af( bam, region_chrom, region_center, parsed_arguments.map_quality, parsed_arguments.base_quality)
+				# limit the number of decimal places
+				vaf = str(round(vaf, 4))
+				plot_title_vaf = "%s - VAF=%s" % (plot_title, vaf)
 
 		if len(bam_paths) >= 2:
 			if idx == 0:
@@ -631,7 +640,15 @@ def main():
 				if "HUGO_Symbol" in vcf_columns and line.split('\t')[ vcf_columns["HUGO_Symbol"] ] != '.':
 					plot_title += " in %s" % line.split('\t')[ vcf_columns["HUGO_Symbol"] ].rstrip('\n')		# .rstrip('\n') added to avoid new line in title
 
-				plot_region( region_chrom, region_center, region_left, region_right, plot_title )
+				VAFs = []
+				if parsed_arguments.for_gSmVs:
+					VAFs = [
+						line.split('\t')[ vcf_columns["Control_VAF"] ],
+						line.split('\t')[ vcf_columns["Tumor_VAF"] ],
+						line.split('\t')[ vcf_columns["RNA_VARIANT_AF"] ],
+					]
+				
+				plot_region( region_chrom, region_center, region_left, region_right, plot_title, VAFs)
 				plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.%s" %(parsed_arguments.prefix, region_chrom, region_center, parsed_arguments.out_format)))
 				plot.savefig( plot_output_file )
 				plot.clf()
