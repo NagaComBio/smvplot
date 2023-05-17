@@ -184,15 +184,16 @@ def variation_af(bam, chr, pos, map_quality, base_quality):
 
 	if variant_info_zero is not None:
 		# ref coverage count
-		read_count_ref = variant_info_zero[5]
+		read_count_ref = variant_info_zero[3]
 
-		# If it a mismatch
-		if variant_info_zero[7] > 0:
-			read_count_alt = variant_info_zero[7]
-		# If it is an insertion
-		elif variant_info_zero[11] > 0:
-			read_count_alt = variant_info_zero[11]
-		# A deletion
+		if variant_info_zero[7] > 0 or variant_info_zero[11] > 0:
+			# If it a mismatch
+			if variant_info_zero[7] > variant_info_zero[11]:
+				read_count_alt = variant_info_zero[7]
+			# If it is an insertion
+			elif variant_info_zero[11] > variant_info_zero[7]:
+				read_count_alt = variant_info_zero[11]
+		# A deletion perhaps
 		else:
 			# Check the next position
 			try:
@@ -203,10 +204,10 @@ def variation_af(bam, chr, pos, map_quality, base_quality):
 
 			if variant_info_one is not None:
 				if variant_info_one[9] > 0:
-					read_count_ref = variant_info_one[5]
+					read_count_ref = variant_info_one[3]
 					read_count_alt = variant_info_one[9]
 
-	variant_af = float(read_count_alt) / (read_count_ref + read_count_alt) if (read_count_ref + read_count_alt) > 0 else 0.0
+	variant_af = float(read_count_alt) / (read_count_ref) if (read_count_ref) > 0 else 0.0
 	return variant_af
 
 
