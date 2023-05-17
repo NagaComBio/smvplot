@@ -85,6 +85,15 @@ smvplot \
 ```
 ### Changelog
 
+**0.0.5**
+- Patch: Update VAF calculation
+
+**0.0.4.14**
+- Container generated via github actions and pushed to dockerhub
+
+**0.0.4**
+- Added container
+
 **0.0.3.2**
 - Minor bug fixes
 
