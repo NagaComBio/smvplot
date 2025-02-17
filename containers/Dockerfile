@@ -18,4 +18,8 @@ COPY --chown=smvplot:smvplot . /build
 RUN micromamba install -y -n base -f /build/containers/smvplot.yaml \
     && micromamba clean --all --yes
 
+# Install build dependencies
+RUN micromamba install -y -n base pip build
+
+# Build and install the Python package
 RUN python -m build && pip install dist/*tar.gz
