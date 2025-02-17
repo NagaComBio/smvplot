@@ -437,7 +437,7 @@ def plot_cigars( cigars, sequences, reverses, ax, reference_function ):
 
 
 
-def plot_region( region_chrom, region_center, region_left, region_right, plot_title, VAFs ):
+def plot_region( region_chrom, region_center, region_left, region_right, plot_title, VAFs = [] ):
 
 	region_string = "%s:%i-%i" % ( region_chrom, region_left, region_right )
 	annotations = get_annotations( region_string )
@@ -500,7 +500,7 @@ def plot_region( region_chrom, region_center, region_left, region_right, plot_ti
 		region_read_counts = len(samtools_reads)
 		if region_read_counts > parsed_arguments.max_depth_plot:
 			print("Warning: too many reads in region %s, %s reads" % (region_string, region_read_counts) )
-			print("Warning: Taking a random of %s reads for plotting and histogram is still based on the oringianl counts" % parsed_arguments.max_depth_plot)
+			print("Warning: Taking a random of %s reads for plotting and histogram is still based on the original counts" % parsed_arguments.max_depth_plot)
 			random_indices = random.sample(range(region_read_counts), parsed_arguments.max_depth_plot)
 			samtools_reads_r = [ samtools_reads[i] for i in sorted(random_indices) ]
 
