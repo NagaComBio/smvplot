@@ -85,6 +85,9 @@ smvplot \
 ```
 ### Changelog
 
+**0.0.5.2**
+- Bug fix in plot_region argument
+
 **0.0.5**
 - Patch: Update VAF calculation
 
