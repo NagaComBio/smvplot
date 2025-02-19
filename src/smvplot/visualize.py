@@ -60,7 +60,9 @@ def get_args():
 	argument_parser.add_argument('--bed', metavar='FILE', type=str,
 			default=None, help='input bed file ( as an alternative use --vcf )')
 	argument_parser.add_argument('--annotations', metavar='FILE', type=str,
-			default=None, help='annotation track indexed with tabix')
+			default=None, help='Annotation track in bed format is indexed with a tabix. The fourth column could contain the annotation text for the segments. A comma can separate multiple files.')
+	argument_parser.add_argument('--annotation_names', metavar='STR', type=str,
+			default=None, help='annotation names separated by comma. Same length as annotation files')
 	argument_parser.add_argument('--prefix', metavar='PREFIX', type=str,
 			default="smvplot", help='target directory and file name prefix for generated output files, [default = %(default)s]')
 	argument_parser.add_argument('--window', metavar='N', type=int,
@@ -107,6 +109,13 @@ def get_args():
 			sys.exit()
 	parsed_arguments.bam_paths = ','.join(bam_paths_new)
 	parsed_arguments.bam_names = ','.join(bam_names_new)
+
+	if len(parsed_arguments.annotations.split(',')) != len(parsed_arguments.annotation_names.split(',')):
+		print("-"*80)
+		print("ERROR: Length of '--annotations' should match the length of '--annotation_names'")
+		print("-"*80)
+		argument_parser.print_help()
+		sys.exit()
 
 	return(parsed_arguments)
 
@@ -213,30 +222,28 @@ def variation_af(bam, chr, pos, map_quality, base_quality):
 	return variant_af
 
 
-def get_annotations( region ):
-
+def get_annotations(region):
+	annotations = []
 	if parsed_arguments.annotations:
+		annotation_files = parsed_arguments.annotations.split(',')
+		for annotation_file in annotation_files:
+			call = [parsed_arguments.tabixbin, annotation_file, region]
+			output = subprocess.check_output(call, encoding='UTF-8')
 
-		call   = [ parsed_arguments.tabixbin, parsed_arguments.annotations, region ]
-		output = subprocess.check_output( call, encoding='UTF-8')
+			if not output:
+				if region[:3] == "chr":
+					call[2] = call[2][3:]
+				else:
+					call[2] = "chr" + call[2]
 
-		if not output:
+				output = subprocess.check_output(call, encoding='UTF-8')
 
-			if region[:3] == "chr":
+			annotations.append(
+				[[line.split('\t')[3], int(line.split('\t')[1]), int(line.split('\t')[2])]
+				 for line in output.split('\n') if len(line.split('\t')) >= 3]
+			)
 
-				call[2] = call[2][3:]
-
-			else:
-
-				call[2] = "chr" + call[2]
-
-		output = subprocess.check_output( call, encoding='UTF-8' )
-
-		return [ [line.split('\t')[3] + "_" + str(line.split('\t')[4]), int(line.split('\t')[1]), int(line.split('\t')[2])] for line in output.split('\n') if len(line.split('\t')) >= 3 ]
-
-	else:
-
-		return None
+	return annotations if annotations else None
 
 
 
@@ -437,72 +444,82 @@ def plot_cigars( cigars, sequences, reverses, ax, reference_function ):
 
 
 
-def plot_region( region_chrom, region_center, region_left, region_right, plot_title, VAFs = [] ):
-
-	region_string = "%s:%i-%i" % ( region_chrom, region_left, region_right )
-	annotations = get_annotations( region_string )
-	basepair_colors = { 'A':"#009600", 'C':"#3030fe", 'G':"#d17105", 'T':"#ff0000", 'N':"#00ffff" }
-	#	print( "region %s annotations: " % region_string, annotations )
+def plot_region(region_chrom, region_center, region_left, region_right, plot_title, VAFs=[]):
+	region_string = "%s:%i-%i" % (region_chrom, region_left, region_right)
+	annotations = get_annotations(region_string)
+	basepair_colors = {'A': "#009600", 'C': "#3030fe", 'G': "#d17105", 'T': "#ff0000", 'N': "#00ffff"}
 
 	bam_paths = parsed_arguments.bam_paths.split(",")
 	bam_names = parsed_arguments.bam_names.split(",")
 
+	annotation_idx = []
+
 	if len(bam_paths) == 3:
-		fig = plot.figure(figsize=(19.2, 16.2))
+		fig = plot.figure(figsize=(19.2, 16.2 + len(annotations)))
 		rows = 10
 		cols = 3
-		h_ratios = [1,5,15,2,5,15,2,5,15]
-		ax_indices = [1,2,4,5,7,8]
+		h_ratios = [1, 5, 15, 2, 5, 15, 2, 5, 15]
+		ax_indices = [1, 2, 4, 5, 7, 8]
 		if annotations:
-			ax_indices += [10]
+			ann_index = 10
+			for i in range(0, len(annotations)):
+				ax_indices += [ann_index + i * 2]
+				annotation_idx.append(ann_index + i * 2)
 	elif len(bam_paths) == 2:
-		fig = plot.figure(figsize=(19.2, 10.8))
+		fig = plot.figure(figsize=(19.2, 10.8 + len(annotations)))
 		rows = 7
 		cols = 3
-		h_ratios = [1,5,15,2,5,15]
-		ax_indices = [1,2,4,5]
+		h_ratios = [1, 5, 15, 2, 5, 15]
+		ax_indices = [1, 2, 4, 5]
 		if annotations:
-			ax_indices += [7]
+			ann_index = 7
+			for i in range(0, len(annotations)):
+				ax_indices += [ann_index + i * 2]
+				annotation_idx.append(ann_index + i * 2)
 	else:
-		fig = plot.figure(figsize=(19.2, 5.4))
+		fig = plot.figure(figsize=(19.2, 5.4 + len(annotations)))
 		rows = 4
 		cols = 3
-		h_ratios = [1,5,15]
-		ax_indices = [1,2]
+		h_ratios = [1, 5, 15]
+		ax_indices = [1, 2]
 		if annotations:
-			ax_indices += [4]
+			ann_index = 4
+			for i in range(0, len(annotations)):
+				ax_indices += [ann_index + i]
+				annotation_idx.append(ann_index + i)
 
 	if annotations:
-		rows += 2
-		h_ratios += [2,1]
+		rows += 2 * len(annotations)
+		h_ratios += [2, 1] * len(annotations)
 
 	h_ratios += [1]
 
-	grid = gridspec.GridSpec( rows, cols, height_ratios=h_ratios, hspace=0,
-							width_ratios=[1,42,1], wspace=0,
-							left=0, right=1, bottom=0, top=1 )
+	grid = gridspec.GridSpec(rows, cols, height_ratios=h_ratios, hspace=0,
+							 width_ratios=[1, 42, 1], wspace=0,
+							 left=0, right=1, bottom=0, top=1)
 
-	ax = [ plot.subplot( grid[i,1] ) for i in ax_indices ]
+	ax = [plot.subplot(grid[i, 1]) for i in ax_indices]
 
-	reference_buffer = ReferenceBuffer( parsed_arguments.ref, region_chrom )
-	visible_basepairs = [ reference_buffer[i] for i in range( region_left, region_right + 1 ) ]
+	reference_buffer = ReferenceBuffer(parsed_arguments.ref, region_chrom)
+	visible_basepairs = [reference_buffer[i] for i in range(region_left, region_right + 1)]
 
 	for idx, bam in enumerate(bam_paths):
-		samtools_call   = ( parsed_arguments.samtoolsbin, "view",
-			"-q", str(parsed_arguments.map_quality),
-			"-F", parsed_arguments.exclude_flag, bam, region_string
-		)
+		samtools_call = (parsed_arguments.samtoolsbin, "view",
+						 "-q", str(parsed_arguments.map_quality),
+						 "-F", parsed_arguments.exclude_flag, bam, region_string)
 
-		samtools_output = subprocess.check_output( samtools_call, encoding='UTF-8' )
-		samtools_output = [ line.split('\t') for line in samtools_output.split('\n') ]
-		samtools_reads = [ line for line in samtools_output if len(line) > 5 ]
+		samtools_output = subprocess.check_output(samtools_call, encoding='UTF-8')
+		samtools_output = [line.split('\t') for line in samtools_output.split('\n')]
+		samtools_reads = [line for line in samtools_output if len(line) > 5]
 
 		region_read_counts = len(samtools_reads)
 		if region_read_counts > parsed_arguments.max_depth_plot:
-			print("Warning: too many reads in region %s, %s reads" % (region_string, region_read_counts) )
+			print("*" * 80)
+			print("Warning: too many reads in region %s, %s reads" % (region_string, region_read_counts))
 			print("Warning: Taking a random of %s reads for plotting and histogram is still based on the original counts" % parsed_arguments.max_depth_plot)
+			print("*" * 80)
 			random_indices = random.sample(range(region_read_counts), parsed_arguments.max_depth_plot)
-			samtools_reads_r = [ samtools_reads[i] for i in sorted(random_indices) ]
+			samtools_reads_r = [samtools_reads[i] for i in sorted(random_indices)]
 
 			samtools_read_plot = samtools_reads_r
 			samtools_read_hist = samtools_reads
@@ -510,14 +527,12 @@ def plot_region( region_chrom, region_center, region_left, region_right, plot_ti
 			samtools_read_plot = samtools_reads
 			samtools_read_hist = samtools_reads
 
+		plot_histogram([parse_cigar(read[5], int(read[3]), region_left, region_right) for read in samtools_read_hist if read[5] != "*"], ax[idx * 2], idx)
+		plot_cigars([parse_cigar(read[5], int(read[3]), region_left, region_right) for read in samtools_read_plot if read[5] != "*"],
+					[read[9] for read in samtools_read_plot if read[5] != "*"],
+					[bool(int(read[1]) & 0x10) for read in samtools_read_plot if read[5] != "*"],
+					ax[idx * 2 + 1], reference_buffer)
 
-		plot_histogram( [ parse_cigar( read[5], int(read[3]), region_left, region_right) for read in samtools_read_hist if read[5] != "*" ], ax[idx*2], idx )
-		plot_cigars( [ parse_cigar( read[5], int(read[3]),region_left, region_right ) for read in samtools_read_plot if read[5] != "*"  ],
-	    	         [ read[9] for read in samtools_read_plot if read[5] != "*"  ],
-	        	     [ bool(int(read[1])&0x10) for read in samtools_read_plot if read[5] != "*"  ],
-	            	 ax[idx*2+1], reference_buffer )
-
-		# Add VAF to the title
 		plot_title_vaf = plot_title
 		if parsed_arguments.vaf:
 			if parsed_arguments.for_gSmVs:
@@ -527,54 +542,62 @@ def plot_region( region_chrom, region_center, region_left, region_right, plot_ti
 					VAFs[idx] = str(round(float(VAFs[idx]), 4))
 				plot_title_vaf = "%s - VAF=%s" % (plot_title, VAFs[idx])
 			else:
-				vaf = variation_af( bam, region_chrom, region_center, parsed_arguments.map_quality, parsed_arguments.base_quality)
-				# limit the number of decimal places
+				vaf = variation_af(bam, region_chrom, region_center, parsed_arguments.map_quality, parsed_arguments.base_quality)
 				vaf = str(round(vaf, 4))
 				plot_title_vaf = "%s - VAF=%s" % (plot_title, vaf)
 
 		if len(bam_paths) >= 2:
 			if idx == 0:
-				ax[idx*2].set_title( "%s - %s" % (plot_title_vaf, bam_names[0]) )
+				ax[idx * 2].set_title("%s - %s" % (plot_title_vaf, bam_names[0]))
 			elif idx == 1:
-				ax[idx*2].set_title( "%s - %s" % (plot_title_vaf, bam_names[1]) )
+				ax[idx * 2].set_title("%s - %s" % (plot_title_vaf, bam_names[1]))
 			elif idx == 2:
-				ax[idx*2].set_title( "%s - %s" % (plot_title_vaf, bam_names[2]) )
+				ax[idx * 2].set_title("%s - %s" % (plot_title_vaf, bam_names[2]))
 		else:
-			ax[idx*2].set_title( "%s - %s" % (plot_title_vaf, bam_names[0]) )
-		ax[idx*2].set_xticks([])
-		ax[idx*2].yaxis.set_tick_params( labelleft=True, labelright=True )
-		ax[idx*2].ticklabel_format( style='plain', axis='x', useOffset=False )
+			ax[idx * 2].set_title("%s - %s" % (plot_title_vaf, bam_names[0]))
+		ax[idx * 2].set_xticks([])
+		ax[idx * 2].yaxis.set_tick_params(labelleft=True, labelright=True)
+		ax[idx * 2].ticklabel_format(style='plain', axis='x', useOffset=False)
 
-		ax[idx*2+1].xaxis.set_tick_params( width=0 )
-		ax[idx*2+1].set_xticks([ i for i in range( region_left, region_right + 1 ) ])
-		ax[idx*2+1].xaxis.set_ticklabels( visible_basepairs )
+		ax[idx * 2 + 1].xaxis.set_tick_params(width=0)
+		ax[idx * 2 + 1].set_xticks([i for i in range(region_left, region_right + 1)])
+		ax[idx * 2 + 1].xaxis.set_ticklabels(visible_basepairs)
 
-		for tick in ax[idx*2+1].get_xticklabels():
-			tick.set_color( basepair_colors[tick._text] )
+		for tick in ax[idx * 2 + 1].get_xticklabels():
+			tick.set_color(basepair_colors[tick._text])
 
-		for axis in ax[idx*2:(idx+1)*2]:
-			axis.axvline( region_center - 0.5, color="black", linewidth=0.5 )
-			axis.axvline( region_center + 0.5, color="black", linewidth=0.5 )
-			for x in range( 10, parsed_arguments.window, 10 ):
-				axis.axvline( region_center - x - 0.5, color="black", linewidth=0.25 )
-				axis.axvline( region_center + x + 0.5, color="black", linewidth=0.25 )
+		for axis in ax[idx * 2:(idx + 1) * 2]:
+			axis.axvline(region_center - 0.5, color="black", linewidth=0.5)
+			axis.axvline(region_center + 0.5, color="black", linewidth=0.5)
+			for x in range(10, parsed_arguments.window, 10):
+				axis.axvline(region_center - x - 0.5, color="black", linewidth=0.25)
+				axis.axvline(region_center + x + 0.5, color="black", linewidth=0.25)
 
 	for axis in ax:
-		axis.set_xlim( xmin=region_left-0.5, xmax=region_right+0.5 )
+		axis.set_xlim(xmin=region_left - 0.5, xmax=region_right + 0.5)
 
 	if annotations:
-		ax[-1].set_title( "annotations from " + parsed_arguments.annotations.split('/')[-1] )
-		ax[-1].set_xticks([])
-		ax[-1].set_yticks([])
-		ax[-1].axis('off')
 
-		for ann in annotations:
+		for i, anns in enumerate(annotations):
 
-			ann[1]=max( ann[1], region_left )
-			ann[2]=min( ann[2], region_right )
+			ax_index = -(len(annotations)) + i
 
-			ax[-1].barh( 0, ann[2]-ann[1]+1, height=1, left=ann[1]-0.5, color="#c8c8c8" )
-			ax[-1].text( float( ann[1] + ann[2] ) / 2.0, 0.5, ann[0], ha='center', va='center' )
+			ax_title = parsed_arguments.annotation_names.split(',')[i]
+
+			ax[ax_index].set_title( "Annotations from " + ax_title, loc="left")
+			ax[ax_index].set_xticks([])
+			ax[ax_index].set_yticks([])
+			ax[ax_index].axis('off')
+
+			for ann in anns:
+				ann[1] = max(ann[1], region_left)
+				ann[2] = min(ann[2], region_right)
+
+				ax[ax_index].barh(0, ann[2] - ann[1] + 1, height=1, left=ann[1] - 0.5, color="#c8c8c8", edgecolor="black", linewidth=0.5)
+				ax[ax_index].text(float(ann[1] + ann[2]) / 2.0, 0.1, ann[0], ha='center', va='center')
+
+			# Add a horizontal line to separate annotations
+			#ax[ax_index].axhline(y = -1, color='black', linewidth=0.5)
 
 
 def main():
