@@ -11,9 +11,9 @@ Install the package via pip
 ### Usage
 ```
 $ smvplot --help
-usage: smvplot [-h] --bam_paths STR --bam_names STR --ref FILE [--exclude_flag INT] [--map_quality INT] [--base_quality INT] [--max_depth_plot INT] [--vaf] [--vcf FILE] [--bed FILE]
-               [--annotations FILE] [--prefix PREFIX] [--window N] [--samtoolsbin N] [--tabixbin N] [--plot_dir DIR] [--out_format STR]
-               [region]
+usage: visualize.py [-h] --bam_paths STR --bam_names STR --ref FILE [--exclude_flag INT] [--map_quality INT] [--base_quality INT] [--max_depth_plot INT] [--vaf] [--for_gSmVs] [--vcf FILE] [--bed FILE] [--annotations FILE] [--annotation_names STR] [--prefix PREFIX]
+                    [--window N] [--samtoolsbin N] [--tabixbin N] [--plot_dir DIR] [--out_format STR] [--ref_base STR] [--alt_base STR]
+                    [region]
 
 This script generates a png file for each entry in a vcf file, a bed file or a manually specified region.
 
@@ -30,15 +30,20 @@ optional arguments:
   --base_quality INT    Minimum base quality for the variant, [default = 13]
   --max_depth_plot INT  Maximum read depth used to plot the high coverage region, [default = 500]
   --vaf                 Include the VAF of the central position in the plot title. Requires reference genome
+  --for_gSmVs           For the gSmVs workflow used internally in DKFZ, the VAFs are directly sourced from the input VCF.
   --vcf FILE            input vcf file ( as an alternative use --bed )
   --bed FILE            input bed file ( as an alternative use --vcf )
-  --annotations FILE    annotation track indexed with tabix
+  --annotations FILE    Annotation track in bed format is indexed with a tabix. The fourth column could contain the annotation text for the segments. A comma can separate multiple files.
+  --annotation_names STR
+                        annotation names separated by comma. Same length as annotation files
   --prefix PREFIX       target directory and file name prefix for generated output files, [default = smvplot]
   --window N            the output file for position X will show the region [X-window,X+window], [default = 100]
   --samtoolsbin N       the path to the samtools binary, [default = samtools]
   --tabixbin N          the path to the tabix binary, [default = tabix]
   --plot_dir DIR        subfolder for the plots
   --out_format STR      Output format of the plot, [default = pdf]
+  --ref_base STR        Reference base for the variant entry, [default = ]
+  --alt_base STR        Alternate base for the variant entry, [default = ]
 ```
 
 ### Example plots
@@ -84,6 +89,9 @@ smvplot \
   --vcf giab_benchmark_variants.vcf # --bed giab_benchmark_variants.vcf
 ```
 ### Changelog
+
+**0.1.0**
+- Minor: Read sorting by input ref/alt based via cmd parameter
 
 **0.0.5.2**
 - Bug fix in plot_region argument
