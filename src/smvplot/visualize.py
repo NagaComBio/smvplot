@@ -20,18 +20,20 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plot
 from matplotlib import gridspec
 
+from vaf_from_pysam import vaf_from_pileup
+
 # Optional dependencies
 try:
-    import pysam
+	import pysam
 except ModuleNotFoundError:
-    # Handle the case when pysam is not installed
-    print("pysam is not installed. Please install it for VAF annotation.")
+	# Handle the case when pysam is not installed
+	print("pysam is not installed. Please install it for VAF annotation.")
 
 try:
-    import pysamstats
+	import pysamstats
 except ModuleNotFoundError:
-    # Handle the case when pysamstats is not installed
-    print("pysamstats is not installed. Please install it for VAF annotation.")
+	# Handle the case when pysamstats is not installed
+	print("pysamstats is not installed. Please install it for VAF annotation.")
 
 
 def get_args():
@@ -77,10 +79,14 @@ def get_args():
 			default="./", help='subfolder for the plots')
 	argument_parser.add_argument('--out_format', metavar='STR', type=str,
 			default='pdf', required=False, help='Output format of the plot, [default = %(default)s]')
+	argument_parser.add_argument('--out_filename', metavar='STR', type=str,
+			default=None, required=False, help='Output filename of the plot, [default = %(default)s]')
 	argument_parser.add_argument('--ref_base', metavar='STR', type=str,
 			default='', required=False, help='Reference base for the variant entry, [default = %(default)s]')
 	argument_parser.add_argument('--alt_base', metavar='STR', type=str,
 			default='', required=False, help='Alternate base for the variant entry, [default = %(default)s]')
+	argument_parser.add_argument('--sort_by_variant', action='store_true',
+			help='Sort the reads based on the variant base')
 
 
 	parsed_arguments = argument_parser.parse_args()
@@ -394,52 +400,67 @@ def plot_histogram( cigars, ax, ax_id):
 
 
 
-def plot_cigars(cigars, sequences, reverses, ax, reference_function, region_center, region_chrom):
+def plot_cigars(cigars, sequences, reverses, ax, reference_function, region_center, region_chrom, read_names, read_names_vaf):
 	patches = []
 
 	right_limits = [0] * len(cigars)
 	basepair_colors = { 'A':"#009600", 'C':"#3030fe", 'G':"#d17105", 'T':"#ff0000", 'N':"#00ffff" }
+	rname_inside_region = []
 
-	# Sort cigars based on non-reference variants at the region center
-	# The cigar list has the following structure: [ (cigar_type, absolute_position, relative_position), ... ]
-	# The cigar_type can be 'M' (match), 'I' (insertion), 'D' (deletion), 'S' (soft clip), 'N' (skipped region)
-	# The absolute_position is the position in the reference genome
-	# The relative_position is the position in the read sequence
-	# The cigar list is sorted based on the non-reference variants at the region center
-	# The region center is the position of the variant in the reference genome
-	# The reference_function is the reference genome sequence
-	# Now separated reads based on the non-reference variants at the region center to group similar reads together
-	# Create two lists: one for the reads that have the non-reference variant at the region center and one for the reads that do not have the non-reference variant at the region center
-	
-	cigar_with_variants = []
-	cigar_without_variants = []
-	seq_order_with_variants = []
-	seq_order_without_variants = []
+	if parsed_arguments.sort_by_variant:
+		# Sort cigars based on non-reference variants at the region center
+		# The cigar list has the following structure: [ (cigar_type, absolute_position, relative_position), ... ]
+		# The cigar_type can be 'M' (match), 'I' (insertion), 'D' (deletion), 'S' (soft clip), 'N' (skipped region)
+		# The absolute_position is the position in the reference genome
+		# The relative_position is the position in the read sequence
+		# The cigar list is sorted based on the non-reference variants at the region center
+		# The region center is the position of the variant in the reference genome
+		# The reference_function is the reference genome sequence
+		# Now separated reads based on the non-reference variants at the region center to group similar reads together
+		# Create two lists: one for the reads that have the non-reference variant at the region center and one for the reads that do not have the non-reference variant at the region center
+		
+		cigar_with_variants = []
+		cigar_without_variants = []
+		seq_order_with_variants = []
+		seq_order_without_variants = []
+		rname_with_variants = []
+		rname_without_variants = []
 
-	for i, (read_cigar, sequence) in enumerate(zip(cigars, sequences)):
-		# Check if the region center is in the read
-		for position_cigar in read_cigar:
-			c_type, abs_pos, rel_pos = position_cigar
-			if abs_pos == region_center:
-				if (c_type == 'M' and sequence[rel_pos] != reference_function[abs_pos]) and sequence[rel_pos] == parsed_arguments.alt_base:
-					cigar_with_variants.append(read_cigar)
-					seq_order_with_variants.append(i)
-					break
-			elif abs_pos == (region_center + 1) and (len(parsed_arguments.alt_base) > 1 or len(parsed_arguments.ref_base) > 1):
-				if c_type == 'I' or c_type == 'D':
-					cigar_with_variants.append(read_cigar)
-					seq_order_with_variants.append(i)
-					break
-		else:
-			cigar_without_variants.append(read_cigar)
-			seq_order_without_variants.append(i)
-	
-	
-	# Sort the reads with the non-reference variant at the region center based on the non-reference variant
-	cigars_sorted = cigar_with_variants + cigar_without_variants
-	sequences_sorted = [sequences[i] for i in seq_order_with_variants] + [sequences[i] for i in seq_order_without_variants]
+		for i, (read_cigar, sequence, rname) in enumerate(zip(cigars, sequences, read_names)):
+			# Check if the region center is in the read
+			for position_cigar in read_cigar:
+				c_type, abs_pos, rel_pos = position_cigar
+				if abs_pos == region_center:
+					rname_inside_region.append(rname)
+					if (c_type == 'M' and sequence[rel_pos] != reference_function[abs_pos]) and sequence[rel_pos] == parsed_arguments.alt_base:
+						cigar_with_variants.append(read_cigar)
+						seq_order_with_variants.append(i)
+						rname_with_variants.append(rname)
+						break
+				elif abs_pos == (region_center + 1) and (len(parsed_arguments.alt_base) > 1 or len(parsed_arguments.ref_base) > 1):
+					rname_inside_region.append(rname)
+					if c_type == 'I' or c_type == 'D':
+						cigar_with_variants.append(read_cigar)
+						seq_order_with_variants.append(i)
+						rname_with_variants.append(rname)
+						break
+			
+			else:
+				cigar_without_variants.append(read_cigar)
+				seq_order_without_variants.append(i)
+				rname_without_variants.append(rname)
+		
+		
+		# Sort the reads with the non-reference variant at the region center based on the non-reference variant
+		cigars_sorted = cigar_with_variants + cigar_without_variants
+		sequences_sorted = [sequences[i] for i in seq_order_with_variants] + [sequences[i] for i in seq_order_without_variants]
+		read_names_sored = rname_with_variants + rname_without_variants
+	else:
+		cigars_sorted = cigars
+		sequences_sorted = sequences
+		read_names_sored = read_names
 
-	for cigar, sequence, reverse in zip(cigars_sorted, sequences_sorted, reverses):
+	for cigar, sequence, reverse, rname in zip(cigars_sorted, sequences_sorted, reverses, read_names_sored):
 
 		for j in range(len(cigars)):
 			if right_limits[j] <= cigar[0][1]:
@@ -450,7 +471,16 @@ def plot_cigars(cigars, sequences, reverses, ax, reference_function, region_cent
 
 		right_limits[line] = cigar[-1][1] + 10
 
-		ax.barh( -line, clipped_cigar[-1][1]-clipped_cigar[0][1]+1, height=1, left=clipped_cigar[0][1]-0.5, color="#c8c8c8", linewidth=0 )
+		# If the read is not in the region, then color it grey
+		# If the read is in the region and used for VAF calculation, then color it grey
+		# rest of the reads are colored white
+		if rname in read_names_vaf or rname not in rname_inside_region:
+			read_color = "#c8c8c8"
+		else:
+			read_color = "#f0f0f0"
+
+
+		ax.barh( -line, clipped_cigar[-1][1]-clipped_cigar[0][1]+1, height=1, left=clipped_cigar[0][1]-0.5, color=read_color, linewidth=0 )
 
 		for (c_type,abs_pos,rel_pos) in cigar:
 			if c_type == 'D':
@@ -569,13 +599,11 @@ def plot_region(region_chrom, region_center, region_left, region_right, plot_tit
 			samtools_read_plot = samtools_reads
 			samtools_read_hist = samtools_reads
 
-		plot_histogram([parse_cigar(read[5], int(read[3]), region_left, region_right) for read in samtools_read_hist if read[5] != "*"], ax[idx * 2], idx)
-		plot_cigars([parse_cigar(read[5], int(read[3]), region_left, region_right) for read in samtools_read_plot if read[5] != "*"],
-					[read[9] for read in samtools_read_plot if read[5] != "*"],
-					[bool(int(read[1]) & 0x10) for read in samtools_read_plot if read[5] != "*"],
-					ax[idx * 2 + 1], reference_buffer, region_center, region_chrom)
 
 		plot_title_vaf = plot_title
+		# Add all the read names to a list
+		read_names_vaf = [ read[0] for read in samtools_read_plot ]
+
 		if parsed_arguments.vaf:
 			if parsed_arguments.for_gSmVs:
 				if VAFs[idx] == ".":
@@ -584,9 +612,30 @@ def plot_region(region_chrom, region_center, region_left, region_right, plot_tit
 					VAFs[idx] = str(round(float(VAFs[idx]), 4))
 				plot_title_vaf = "%s - VAF=%s" % (plot_title, VAFs[idx])
 			else:
-				vaf = variation_af(bam, region_chrom, region_center, parsed_arguments.map_quality, parsed_arguments.base_quality)
+				#vaf = variation_af(bam, region_chrom, region_center, parsed_arguments.map_quality, parsed_arguments.base_quality)
+				# vaf_from_pileup(args.cram_file, args.ref_file, args.chrom, args.pos, args.var_ref, args.var_alt)
+				read_names_vaf, alt_count, total_depth, vaf = vaf_from_pileup(bam,
+																			parsed_arguments.ref,
+																			region_chrom,
+																			region_center,
+																			parsed_arguments.ref_base,
+																			parsed_arguments.alt_base,
+																			parsed_arguments.map_quality,
+																			parsed_arguments.base_quality)
 				vaf = str(round(vaf, 4))
-				plot_title_vaf = "%s - VAF=%s" % (plot_title, vaf)
+				plot_title_vaf = "%s - VAF=%s (%s/%s)" % (plot_title, vaf, alt_count, total_depth)
+
+		# Plot the histogram and the cigars
+		plot_histogram([parse_cigar(read[5], int(read[3]), region_left, region_right) for read in samtools_read_hist if read[5] != "*"], 
+						ax[idx * 2],
+						idx)
+		plot_cigars([parse_cigar(read[5], int(read[3]), region_left, region_right) for read in samtools_read_plot if read[5] != "*"],
+					[read[9] for read in samtools_read_plot if read[5] != "*"],
+					[bool(int(read[1]) & 0x10) for read in samtools_read_plot if read[5] != "*"],
+					ax[idx * 2 + 1], reference_buffer, region_center, region_chrom,
+					[read[0] for read in samtools_read_plot if read[5] != "*"],
+					read_names_vaf)
+
 
 		if len(bam_paths) >= 2:
 			if idx == 0:
@@ -603,7 +652,7 @@ def plot_region(region_chrom, region_center, region_left, region_right, plot_tit
 
 		ax[idx * 2 + 1].xaxis.set_tick_params(width=0)
 		ax[idx * 2 + 1].set_xticks([i for i in range(region_left, region_right + 1)])
-		ax[idx * 2 + 1].xaxis.set_ticklabels(visible_basepairs)
+		ax[idx * 2 + 1].xaxis.set_ticklabels(visible_basepairs, fontfamily="monospace")
 
 		for tick in ax[idx * 2 + 1].get_xticklabels():
 			tick.set_color(basepair_colors[tick._text])
@@ -649,6 +698,12 @@ def main():
 
 	os.makedirs(parsed_arguments.plot_dir, exist_ok = True)
 
+	if parsed_arguments.out_filename:
+		out_filename = "%s.%s" %(parsed_arguments.out_filename, parsed_arguments.out_format)
+	else:
+		out_filename = "%s_%s_%i.%s" %(parsed_arguments.prefix, region_chrom, region_center, parsed_arguments.out_format)
+
+
 	if parsed_arguments.region:
 
 		region_chrom = ':'.join(parsed_arguments.region.split(':')[:-1])
@@ -665,13 +720,22 @@ def main():
 			region_left   = region_center - parsed_arguments.window
 			region_right  = region_center + parsed_arguments.window
 
-		plot_title = "%s:%s-%s>%s" % ( region_chrom, region_center, parsed_arguments.ref_base, parsed_arguments.alt_base )
+		plot_title = "%s:%s" % ( region_chrom, region_center )
+		if parsed_arguments.ref_base and parsed_arguments.alt_base:
+			plot_title += " %s>%s" % (parsed_arguments.ref_base, parsed_arguments.alt_base)
+
+		# For variants with multiple SNVs, split them and assume the first base 
+		# in the reference and alternate alleles are the different and 
+		# take is as the ref and alt base for sorting
+		if len(parsed_arguments.ref_base) == len(parsed_arguments.alt_base):
+			parsed_arguments.ref_base = parsed_arguments.ref_base[0]
+			parsed_arguments.alt_base = parsed_arguments.alt_base[0]
 
 		#print(region_chrom, region_left, region_center, region_right)
 
 		plot_region( region_chrom, region_center, region_left, region_right, plot_title )
 
-		plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.%s" %(parsed_arguments.prefix, region_chrom, region_center, parsed_arguments.out_format)))
+		plot_output_file = os.path.join(parsed_arguments.plot_dir, out_filename)
 		plot.savefig( plot_output_file )
 		plot.clf()
 		plot.cla()
@@ -700,6 +764,17 @@ def main():
 
 				plot_title = "%s:%s" % ( region_chrom, region_center )
 				plot_title += " %s>%s" % (region_ref, region_alt)
+
+				# For variants with multiple SNVs, split them and assume the first base 
+				# in the reference and alternate alleles are the different and 
+				# take is as the ref and alt base for sorting
+				if len(region_ref) == len(region_alt):
+					parsed_arguments.ref_base = region_ref[0]
+					parsed_arguments.alt_base = region_alt[0]
+
+				parsed_arguments.ref_base = region_ref
+				parsed_arguments.alt_base = region_alt
+
 				if "VEP_Most_Severe_Consequence" in vcf_columns and line.split('\t')[ vcf_columns["VEP_Most_Severe_Consequence"] ] != '.':
 					plot_title += " %s" % line.split('\t')[ vcf_columns["VEP_Most_Severe_Consequence"] ].replace("_", " ").rstrip('\n')            # .rstrip('\n') added to avoid new line in title
 				if "HUGO_Symbol" in vcf_columns and line.split('\t')[ vcf_columns["HUGO_Symbol"] ] != '.':
@@ -714,7 +789,7 @@ def main():
 					]
 
 				plot_region( region_chrom, region_center, region_left, region_right, plot_title, VAFs)
-				plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.%s" %(parsed_arguments.prefix, region_chrom, region_center, parsed_arguments.out_format)))
+				plot_output_file = os.path.join(parsed_arguments.plot_dir, out_filename)
 				plot.savefig( plot_output_file )
 				plot.clf()
 				plot.cla()
@@ -736,7 +811,7 @@ def main():
 				plot_title = "%s:%s" % ( region_chrom, region_center )
 
 				plot_region( region_chrom, region_center, region_left, region_right, plot_title )
-				plot_output_file = os.path.join(parsed_arguments.plot_dir, ("%s_%s_%i.%s" %(parsed_arguments.prefix, region_chrom, region_center, parsed_arguments.out_format)))
+				plot_output_file = os.path.join(parsed_arguments.plot_dir, out_filename)
 				plot.savefig( plot_output_file )
 				plot.clf()
 				plot.cla()
