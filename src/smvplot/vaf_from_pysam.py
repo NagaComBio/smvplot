@@ -34,6 +34,10 @@ def vaf_from_pileup(bam_file, ref_file, chrom, pos, var_ref, var_alt, min_mqual,
         if pileupcol.pos + 1 == pos:
             for pileupread in pileupcol.pileups:
 
+                # Skip if query position is None
+                if pileupread.query_position is None:
+                    continue
+
                 read_names.append(pileupread.alignment.query_name)
                 ref_base = pileupread.alignment.query_sequence[pileupread.query_position]
                 base_quality = pileupread.alignment.query_qualities[pileupread.query_position]
