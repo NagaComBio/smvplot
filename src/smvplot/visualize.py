@@ -317,7 +317,7 @@ def parse_cigar( cigar, pos, r_left, r_right):
 
 		elif t == 'I':
 
-			cigar_struct2.append( (t,abs_pos, rel_pos+m) )
+			cigar_struct2.append( (t,abs_pos, rel_pos) )
 
 			for m in range(1,n):
 				if r_left <= abs_pos <= r_right:
