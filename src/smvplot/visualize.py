@@ -120,12 +120,13 @@ def get_args():
 	parsed_arguments.bam_paths = ','.join(bam_paths_new)
 	parsed_arguments.bam_names = ','.join(bam_names_new)
 
-	if len(parsed_arguments.annotations.split(',')) != len(parsed_arguments.annotation_names.split(',')):
-		print("-"*80)
-		print("ERROR: Length of '--annotations' should match the length of '--annotation_names'")
-		print("-"*80)
-		argument_parser.print_help()
-		sys.exit()
+	if parsed_arguments.annotations:
+		if len(parsed_arguments.annotations.split(',')) != len(parsed_arguments.annotation_names.split(',')):
+			print("-"*80)
+			print("ERROR: Length of '--annotations' should match the length of '--annotation_names'")
+			print("-"*80)
+			argument_parser.print_help()
+			sys.exit()
 
 	return(parsed_arguments)
 
@@ -253,7 +254,7 @@ def get_annotations(region):
 				 for line in output.split('\n') if len(line.split('\t')) >= 3]
 			)
 
-	return annotations if annotations else None
+	return annotations
 
 
 
@@ -724,12 +725,12 @@ def main():
 		if parsed_arguments.ref_base and parsed_arguments.alt_base:
 			plot_title += " %s>%s" % (parsed_arguments.ref_base, parsed_arguments.alt_base)
 
-		# For variants with multiple SNVs, split them and assume the first base 
-		# in the reference and alternate alleles are the different and 
-		# take is as the ref and alt base for sorting
-		if len(parsed_arguments.ref_base) == len(parsed_arguments.alt_base):
-			parsed_arguments.ref_base = parsed_arguments.ref_base[0]
-			parsed_arguments.alt_base = parsed_arguments.alt_base[0]
+			# For variants with multiple SNVs, split them and assume the first base 
+			# in the reference and alternate alleles are the different and 
+			# take is as the ref and alt base for sorting
+			if len(parsed_arguments.ref_base) == len(parsed_arguments.alt_base):
+				parsed_arguments.ref_base = parsed_arguments.ref_base[0]
+				parsed_arguments.alt_base = parsed_arguments.alt_base[0]
 
 		#print(region_chrom, region_left, region_center, region_right)
 
@@ -772,8 +773,9 @@ def main():
 					parsed_arguments.ref_base = region_ref[0]
 					parsed_arguments.alt_base = region_alt[0]
 
-				parsed_arguments.ref_base = region_ref
-				parsed_arguments.alt_base = region_alt
+				if parsed_arguments.ref_base and parsed_arguments.alt_base:
+					parsed_arguments.ref_base = region_ref
+					parsed_arguments.alt_base = region_alt
 
 				if "VEP_Most_Severe_Consequence" in vcf_columns and line.split('\t')[ vcf_columns["VEP_Most_Severe_Consequence"] ] != '.':
 					plot_title += " %s" % line.split('\t')[ vcf_columns["VEP_Most_Severe_Consequence"] ].replace("_", " ").rstrip('\n')            # .rstrip('\n') added to avoid new line in title
