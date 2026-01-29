@@ -433,12 +433,25 @@ def plot_cigars(cigars, sequences, reverses, ax, reference_function, region_cent
 				c_type, abs_pos, rel_pos = position_cigar
 				if abs_pos == region_center:
 					rname_inside_region.append(rname)
-					if (c_type == 'M' and sequence[rel_pos] != reference_function[abs_pos]) and sequence[rel_pos] == parsed_arguments.alt_base:
-						cigar_with_variants.append(read_cigar)
-						seq_order_with_variants.append(i)
-						rname_with_variants.append(rname)
-						break
-				elif abs_pos == (region_center + 1) and (len(parsed_arguments.alt_base) > 1 or len(parsed_arguments.ref_base) > 1):
+					if c_type == 'M':
+						# Handling SNV and MNV
+						if len(parsed_arguments.alt_base) == 1:
+							if sequence[rel_pos] != reference_function[abs_pos] and sequence[rel_pos] == parsed_arguments.alt_base:
+								cigar_with_variants.append(read_cigar)
+								seq_order_with_variants.append(i)
+								rname_with_variants.append(rname)
+								break
+						elif len(parsed_arguments.alt_base) > 1 and len(parsed_arguments.ref_base) == len(parsed_arguments.alt_base):
+							# Construct the read substring corresponding to the MNV
+							mnv_len = len(parsed_arguments.alt_base)
+							if rel_pos + mnv_len <= len(sequence):
+								read_substring = sequence[rel_pos : rel_pos + mnv_len]
+								if read_substring == parsed_arguments.alt_base:
+									cigar_with_variants.append(read_cigar)
+									seq_order_with_variants.append(i)
+									rname_with_variants.append(rname)
+									break
+				elif abs_pos == (region_center + 1) and (len(parsed_arguments.alt_base) != len(parsed_arguments.ref_base)):
 					rname_inside_region.append(rname)
 					if c_type == 'I' or c_type == 'D':
 						cigar_with_variants.append(read_cigar)
@@ -725,12 +738,8 @@ def main():
 		if parsed_arguments.ref_base and parsed_arguments.alt_base:
 			plot_title += " %s>%s" % (parsed_arguments.ref_base, parsed_arguments.alt_base)
 
-			# For variants with multiple SNVs, split them and assume the first base 
-			# in the reference and alternate alleles are the different and 
-			# take is as the ref and alt base for sorting
-			if len(parsed_arguments.ref_base) == len(parsed_arguments.alt_base):
-				parsed_arguments.ref_base = parsed_arguments.ref_base[0]
-				parsed_arguments.alt_base = parsed_arguments.alt_base[0]
+			# For variants with multiple SNVs (MNVs), keep the full base sequence for sorting
+			pass
 
 		#print(region_chrom, region_left, region_center, region_right)
 
@@ -766,12 +775,8 @@ def main():
 				plot_title = "%s:%s" % ( region_chrom, region_center )
 				plot_title += " %s>%s" % (region_ref, region_alt)
 
-				# For variants with multiple SNVs, split them and assume the first base 
-				# in the reference and alternate alleles are the different and 
-				# take is as the ref and alt base for sorting
-				if len(region_ref) == len(region_alt):
-					parsed_arguments.ref_base = region_ref[0]
-					parsed_arguments.alt_base = region_alt[0]
+				# For variants with multiple SNVs (MNVs), keep the full base sequence for sorting
+				pass
 
 				if parsed_arguments.ref_base and parsed_arguments.alt_base:
 					parsed_arguments.ref_base = region_ref

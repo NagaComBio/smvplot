@@ -11,8 +11,8 @@ Install the package via pip
 ### Usage
 ```
 $ smvplot --help
-usage: visualize.py [-h] --bam_paths STR --bam_names STR --ref FILE [--exclude_flag INT] [--map_quality INT] [--base_quality INT] [--max_depth_plot INT] [--vaf] [--for_gSmVs] [--vcf FILE] [--bed FILE] [--annotations FILE] [--annotation_names STR] [--prefix PREFIX]
-                    [--window N] [--samtoolsbin N] [--tabixbin N] [--plot_dir DIR] [--out_format STR] [--ref_base STR] [--alt_base STR]
+usage: visualize.py [-h] --bam_paths STR --bam_names STR --ref FILE [--exclude_flag INT] [--map_quality INT] [--base_quality INT] [--max_depth_plot INT] [--vaf] [--for_gSmVs] [--vcf FILE] [--bed FILE] [--annotations FILE] [--annotation_names STR] [--prefix PREFIX] [--window N] [--samtoolsbin N] [--tabixbin N] [--plot_dir DIR] [--out_format STR] [--out_filename STR] [--ref_base STR] [--alt_base STR]
+                    [--sort_by_variant]
                     [region]
 
 This script generates a png file for each entry in a vcf file, a bed file or a manually specified region.
@@ -42,8 +42,10 @@ optional arguments:
   --tabixbin N          the path to the tabix binary, [default = tabix]
   --plot_dir DIR        subfolder for the plots
   --out_format STR      Output format of the plot, [default = pdf]
+  --out_filename STR    Output filename of the plot, [default = None]
   --ref_base STR        Reference base for the variant entry, [default = ]
   --alt_base STR        Alternate base for the variant entry, [default = ]
+  --sort_by_variant     Sort the reads based on the variant base
 ```
 
 ### Example plots

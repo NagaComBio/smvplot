@@ -47,6 +47,16 @@ def vaf_from_pileup(bam_file, ref_file, chrom, pos, var_ref, var_alt, min_mqual,
                         ref_count += 1
                     elif ref_base == var_alt:
                         alt_count += 1
+                elif len(var_ref) == len(var_alt):
+                    # MNV handling
+                    mnv_len = len(var_alt)
+                    qp = pileupread.query_position
+                    if qp + mnv_len <= len(pileupread.alignment.query_sequence):
+                        read_substr = pileupread.alignment.query_sequence[qp:qp+mnv_len] 
+                        if read_substr == var_alt:
+                            alt_count += 1
+                        elif read_substr == var_ref:
+                            ref_count += 1
                 else:
                     # Insertion or deletion
                     indel_indicator = pileupread.indel
@@ -70,7 +80,7 @@ def vaf_from_pileup(bam_file, ref_file, chrom, pos, var_ref, var_alt, min_mqual,
     
     if total_depth == 0:
         print(f"No reads covering the variant at {chrom}:{pos}")
-        return None
+        return None, None, None, None
     
     vaf = alt_count / total_depth
 
