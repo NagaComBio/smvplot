@@ -20,7 +20,11 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plot
 from matplotlib import gridspec
 
-from vaf_from_pysam import vaf_from_pileup
+try:
+	from vaf_from_pysam import vaf_from_pileup
+except ImportError:
+	from smvplot.vaf_from_pysam import vaf_from_pileup
+
 
 # Optional dependencies
 try:
@@ -36,7 +40,11 @@ except ModuleNotFoundError:
 	print("pysamstats is not installed. Please install it for VAF annotation.")
 
 
+parsed_arguments = None
+
+
 def get_args():
+
 	argument_parser = argparse.ArgumentParser(
 		description='This script generates a png file for each entry in a vcf file, a bed file or a manually specified region.' )
 	argument_parser.add_argument('--bam_paths', metavar='STR', type=str,
@@ -87,6 +95,14 @@ def get_args():
 			default='', required=False, help='Alternate base for the variant entry, [default = %(default)s]')
 	argument_parser.add_argument('--sort_by_variant', action='store_true',
 			help='Sort the reads based on the variant base')
+	argument_parser.add_argument('--bam_types', metavar='STR', type=str,
+			default='auto', required=False, help='input list of BAM types (dna, rna, auto) separated by comma. Same length as BAM files or single value applied to all, [default = %(default)s]')
+	argument_parser.add_argument('--read_color_by', metavar='STR', type=str,
+			default='auto', choices=['auto', 'strand', 'pair', 'none'], required=False,
+			help='How to color reads: auto (strand for DNA, pair for RNA), strand, pair, none, [default = %(default)s]')
+	argument_parser.add_argument('--read_color_scheme', metavar='STR', type=str,
+			default='grey', choices=['grey', 'igv'], required=False,
+			help='Color scheme for reads: grey (monochrome shades) or igv (IGV red/blue strand colors), [default = %(default)s]')
 
 
 	parsed_arguments = argument_parser.parse_args()
@@ -102,12 +118,34 @@ def get_args():
 	bam_paths = parsed_arguments.bam_paths.split(',')
 	bam_names = parsed_arguments.bam_names.split(',')
 
-	bam_paths_new, bam_names_new = [], []
+	# Process bam_types
+	bam_types_raw = [t.strip().lower() for t in parsed_arguments.bam_types.split(',')]
+	if len(bam_types_raw) == 1:
+		bam_types = bam_types_raw * len(bam_paths)
+	elif len(bam_types_raw) == len(bam_paths):
+		bam_types = bam_types_raw
+	else:
+		print("-" * 80)
+		print("ERROR: Length of '--bam_types' should match the length of '--bam_paths' or be a single value")
+		print("-" * 80)
+		argument_parser.print_help()
+		sys.exit()
 
-	for path, name in zip(bam_paths, bam_names):
+	for t in bam_types:
+		if t not in ['dna', 'rna', 'auto']:
+			print("-" * 80)
+			print(f"ERROR: Invalid bam_type '{t}'. Allowed values are 'dna', 'rna', 'auto'")
+			print("-" * 80)
+			argument_parser.print_help()
+			sys.exit()
+
+	bam_paths_new, bam_names_new, bam_types_new = [], [], []
+
+	for path, name, btype in zip(bam_paths, bam_names, bam_types):
 			if path[-3:] == 'bam' or path[-4:] == 'cram':
 					bam_paths_new.append(path)
 					bam_names_new.append(name)
+					bam_types_new.append(btype)
 			else:
 					print(f"WARNING: BAM file {path} does not end with '.bam' or '.cram'")
 
@@ -119,6 +157,7 @@ def get_args():
 			sys.exit()
 	parsed_arguments.bam_paths = ','.join(bam_paths_new)
 	parsed_arguments.bam_names = ','.join(bam_names_new)
+	parsed_arguments.bam_types = ','.join(bam_types_new)
 
 	if parsed_arguments.annotations:
 		if len(parsed_arguments.annotations.split(',')) != len(parsed_arguments.annotation_names.split(',')):
@@ -401,45 +440,86 @@ def plot_histogram( cigars, ax, ax_id):
 
 
 
-def plot_cigars(cigars, sequences, reverses, ax, reference_function, region_center, region_chrom, read_names, read_names_vaf):
+BAM_TYPE_CACHE = {}
+
+
+def detect_bam_type(bam_path, samtoolsbin="samtools", samtools_reads=None):
+	"""
+	Detect whether a BAM is DNA or RNA.
+	Checks:
+	1. Reads in the queried region:
+	   - Spliced CIGAR ('N')
+	   - Splice tags ('XS:A:+', 'XS:A:-', 'jI:B:i', 'jM:B:c')
+	2. BAM header @PG lines for RNA aligners (STAR, hisat2, tophat, rnastar)
+	Falls back to 'dna'.
+	"""
+	if bam_path in BAM_TYPE_CACHE:
+		return BAM_TYPE_CACHE[bam_path]
+
+	if samtools_reads:
+		for read in samtools_reads:
+			if len(read) > 5 and 'N' in read[5]:
+				BAM_TYPE_CACHE[bam_path] = 'rna'
+				return 'rna'
+			if len(read) > 11:
+				for tag in read[11:]:
+					if tag.startswith('XS:A:') or tag.startswith('jI:B:') or tag.startswith('jM:B:'):
+						BAM_TYPE_CACHE[bam_path] = 'rna'
+						return 'rna'
+
+	try:
+		header_call = [samtoolsbin, "view", "-H", bam_path]
+		header_output = subprocess.check_output(header_call, encoding='UTF-8', stderr=subprocess.DEVNULL)
+		rna_keywords = ['STAR', 'hisat2', 'HISAT2', 'tophat', 'TopHat', 'rnastar', 'RNA-STAR']
+		for line in header_output.split('\n'):
+			if line.startswith('@PG'):
+				for kw in rna_keywords:
+					if kw in line:
+						BAM_TYPE_CACHE[bam_path] = 'rna'
+						return 'rna'
+	except Exception:
+		pass
+
+	BAM_TYPE_CACHE[bam_path] = 'dna'
+	return 'dna'
+
+
+def plot_cigars(cigars, sequences, reverses, flags, bam_type, ax, reference_function, region_center, region_chrom, read_names, read_names_vaf):
 	patches = []
+	patch_colors = []
 
 	right_limits = [0] * len(cigars)
 	basepair_colors = { 'A':"#009600", 'C':"#3030fe", 'G':"#d17105", 'T':"#ff0000", 'N':"#00ffff" }
 	rname_inside_region = []
 
+	for read_cigar, rname in zip(cigars, read_names):
+		for position_cigar in read_cigar:
+			c_type, abs_pos, rel_pos = position_cigar
+			if abs_pos == region_center:
+				rname_inside_region.append(rname)
+				break
+			elif abs_pos == (region_center + 1) and (len(parsed_arguments.alt_base) != len(parsed_arguments.ref_base)) and (c_type == 'I' or c_type == 'D'):
+				rname_inside_region.append(rname)
+				break
+
 	if parsed_arguments.sort_by_variant:
-		# Sort cigars based on non-reference variants at the region center
-		# The cigar list has the following structure: [ (cigar_type, absolute_position, relative_position), ... ]
-		# The cigar_type can be 'M' (match), 'I' (insertion), 'D' (deletion), 'S' (soft clip), 'N' (skipped region)
-		# The absolute_position is the position in the reference genome
-		# The relative_position is the position in the read sequence
-		# The cigar list is sorted based on the non-reference variants at the region center
-		# The region center is the position of the variant in the reference genome
-		# The reference_function is the reference genome sequence
-		# Now separated reads based on the non-reference variants at the region center to group similar reads together
-		# Create two lists: one for the reads that have the non-reference variant at the region center and one for the reads that do not have the non-reference variant at the region center
-		
 		cigar_with_variants = []
 		cigar_without_variants = []
 		seq_order_with_variants = []
 		seq_order_without_variants = []
-		rname_with_variants = []
-		rname_without_variants = []
 
 		for i, (read_cigar, sequence, rname) in enumerate(zip(cigars, sequences, read_names)):
-			# Check if the region center is in the read
+			has_variant = False
 			for position_cigar in read_cigar:
 				c_type, abs_pos, rel_pos = position_cigar
 				if abs_pos == region_center:
-					rname_inside_region.append(rname)
 					if c_type == 'M':
 						# Handling SNV and MNV
 						if len(parsed_arguments.alt_base) == 1:
 							if sequence[rel_pos] != reference_function[abs_pos] and sequence[rel_pos] == parsed_arguments.alt_base:
 								cigar_with_variants.append(read_cigar)
 								seq_order_with_variants.append(i)
-								rname_with_variants.append(rname)
+								has_variant = True
 								break
 						elif len(parsed_arguments.alt_base) > 1 and len(parsed_arguments.ref_base) == len(parsed_arguments.alt_base):
 							# Construct the read substring corresponding to the MNV
@@ -449,32 +529,56 @@ def plot_cigars(cigars, sequences, reverses, ax, reference_function, region_cent
 								if read_substring == parsed_arguments.alt_base:
 									cigar_with_variants.append(read_cigar)
 									seq_order_with_variants.append(i)
-									rname_with_variants.append(rname)
+									has_variant = True
 									break
 				elif abs_pos == (region_center + 1) and (len(parsed_arguments.alt_base) != len(parsed_arguments.ref_base)):
-					rname_inside_region.append(rname)
 					if c_type == 'I' or c_type == 'D':
 						cigar_with_variants.append(read_cigar)
 						seq_order_with_variants.append(i)
-						rname_with_variants.append(rname)
+						has_variant = True
 						break
-			
-			else:
+			if not has_variant:
 				cigar_without_variants.append(read_cigar)
 				seq_order_without_variants.append(i)
-				rname_without_variants.append(rname)
-		
-		
-		# Sort the reads with the non-reference variant at the region center based on the non-reference variant
+
+		# Sort all read attributes consistently
+		order = seq_order_with_variants + seq_order_without_variants
 		cigars_sorted = cigar_with_variants + cigar_without_variants
-		sequences_sorted = [sequences[i] for i in seq_order_with_variants] + [sequences[i] for i in seq_order_without_variants]
-		read_names_sored = rname_with_variants + rname_without_variants
+		sequences_sorted = [sequences[i] for i in order]
+		read_names_sorted = [read_names[i] for i in order]
+		reverses_sorted = [reverses[i] for i in order]
+		flags_sorted = [flags[i] for i in order]
 	else:
 		cigars_sorted = cigars
 		sequences_sorted = sequences
-		read_names_sored = read_names
+		read_names_sorted = read_names
+		reverses_sorted = reverses
+		flags_sorted = flags
 
-	for cigar, sequence, reverse, rname in zip(cigars_sorted, sequences_sorted, reverses, read_names_sored):
+	# Determine coloring mode
+	color_by = parsed_arguments.read_color_by
+	if color_by == 'auto':
+		mode = 'pair' if bam_type == 'rna' else 'strand'
+	else:
+		mode = color_by
+
+	# Determine color scheme palettes
+	if parsed_arguments.read_color_scheme == 'igv':
+		# IGV classic strand colors
+		col_fwd_or_r1 = "#e69696"   # Soft red / positive strand
+		col_rev_or_r2 = "#9696e6"   # Soft blue / negative strand
+		col_unpaired = "#aaaaaa"    # IGV neutral grey
+		col_none = "#aaaaaa"
+		col_filtered = "#f0f0f0"
+	else:
+		# Grey shades
+		col_fwd_or_r1 = "#c8c8c8"   # Light grey
+		col_rev_or_r2 = "#707070"   # Dark grey
+		col_unpaired = "#a0a0a0"    # Neutral grey
+		col_none = "#c8c8c8"
+		col_filtered = "#f0f0f0"
+
+	for cigar, sequence, reverse, flag, rname in zip(cigars_sorted, sequences_sorted, reverses_sorted, flags_sorted, read_names_sorted):
 
 		for j in range(len(cigars)):
 			if right_limits[j] <= cigar[0][1]:
@@ -485,16 +589,24 @@ def plot_cigars(cigars, sequences, reverses, ax, reference_function, region_cent
 
 		right_limits[line] = cigar[-1][1] + 10
 
-		# If the read is not in the region, then color it grey
-		# If the read is in the region and used for VAF calculation, then color it grey
-		# rest of the reads are colored white
-		if rname in read_names_vaf or rname not in rname_inside_region:
-			read_color = "#c8c8c8"
+		# Check if read was excluded from VAF calculation
+		if rname in rname_inside_region and rname not in read_names_vaf:
+			read_color = col_filtered
 		else:
-			read_color = "#f0f0f0"
+			if mode == 'strand':
+				read_color = col_rev_or_r2 if reverse else col_fwd_or_r1
+			elif mode == 'pair':
+				if flag & 0x40:  # First in pair (R1)
+					read_color = col_fwd_or_r1
+				elif flag & 0x80:  # Second in pair (R2)
+					read_color = col_rev_or_r2
+				else:  # Single-end / unpaired
+					read_color = col_unpaired
+			else:  # 'none'
+				read_color = col_none
 
-
-		ax.barh( -line, clipped_cigar[-1][1]-clipped_cigar[0][1]+1, height=1, left=clipped_cigar[0][1]-0.5, color=read_color, linewidth=0 )
+		cigar_to_draw = clipped_cigar if len(clipped_cigar) > 0 else cigar
+		ax.barh( -line, cigar_to_draw[-1][1]-cigar_to_draw[0][1]+1, height=1, left=cigar_to_draw[0][1]-0.5, color=read_color, linewidth=0 )
 
 		for (c_type,abs_pos,rel_pos) in cigar:
 			if c_type == 'D':
@@ -506,12 +618,11 @@ def plot_cigars(cigars, sequences, reverses, ax, reference_function, region_cent
 			elif c_type == 'N':
 				ax.barh( -line, 1, height=1, left=abs_pos-0.5, color="#f0fdff", linewidth=0 )
 
-
 		for (c_type,abs_pos,rel_pos) in cigar:
 			if c_type == 'I':
 				ax.barh( -line, 0.6, height=1, left=abs_pos-0.8, fill=False, linewidth=1 )
 
-		ax.barh( -line, cigar[-1][1]-cigar[0][1]+1, height=1, left=cigar[0][1]-0.5, fill=False, linewidth=0 ) # linewidth changed to 0
+		ax.barh( -line, cigar[-1][1]-cigar[0][1]+1, height=1, left=cigar[0][1]-0.5, fill=False, linewidth=0 )
 
 		if reverse:
 			patches.append( matplotlib.patches.Polygon( [(cigar[0][1]-0.5,-line),(cigar[0][1]-0.5,1-line),(cigar[0][1]-1.5,0.5-line)] ) )
@@ -521,12 +632,15 @@ def plot_cigars(cigars, sequences, reverses, ax, reference_function, region_cent
 			patches.append( matplotlib.patches.Polygon( [(cigar[-1][1]+0.5,-line),(cigar[-1][1]+0.5,1-line),(cigar[-1][1]+1.5,0.5-line)] ) )
 			patches.append( matplotlib.patches.Polygon( [(cigar[0][1]-0.5,1-line),(cigar[0][1]-1,1-line),(cigar[0][1]-0.5,0.5-line)] ) )
 			patches.append( matplotlib.patches.Polygon( [(cigar[0][1]-0.5,-line),(cigar[0][1]-1,-line),(cigar[0][1]-0.5,0.5-line)] ) )
+		patch_colors.extend([read_color, read_color, read_color])
 
-	collection = matplotlib.collections.PatchCollection( patches, linewidths=0.5, edgecolors="black", facecolors="yellow" )
+	collection = matplotlib.collections.PatchCollection( patches, linewidths=0.5, edgecolors="black", facecolors=patch_colors )
 	ax.add_collection( collection )
 
 	ax.set_ylim( ymin=( 1 - len([ l for l in right_limits if l > 0 ]) ), ymax=1 )
 	ax.set_yticks([])
+
+
 
 
 
@@ -537,6 +651,7 @@ def plot_region(region_chrom, region_center, region_left, region_right, plot_tit
 
 	bam_paths = parsed_arguments.bam_paths.split(",")
 	bam_names = parsed_arguments.bam_names.split(",")
+	bam_types = parsed_arguments.bam_types.split(",")
 
 	annotation_idx = []
 
@@ -639,6 +754,11 @@ def plot_region(region_chrom, region_center, region_left, region_right, plot_tit
 				vaf = str(round(vaf, 4))
 				plot_title_vaf = "%s - VAF=%s (%s/%s)" % (plot_title, vaf, alt_count, total_depth)
 
+		# Determine BAM type for current track
+		cur_bam_type = bam_types[idx] if idx < len(bam_types) else 'auto'
+		if cur_bam_type == 'auto':
+			cur_bam_type = detect_bam_type(bam, parsed_arguments.samtoolsbin, samtools_read_hist)
+
 		# Plot the histogram and the cigars
 		plot_histogram([parse_cigar(read[5], int(read[3]), region_left, region_right) for read in samtools_read_hist if read[5] != "*"], 
 						ax[idx * 2],
@@ -646,6 +766,8 @@ def plot_region(region_chrom, region_center, region_left, region_right, plot_tit
 		plot_cigars([parse_cigar(read[5], int(read[3]), region_left, region_right) for read in samtools_read_plot if read[5] != "*"],
 					[read[9] for read in samtools_read_plot if read[5] != "*"],
 					[bool(int(read[1]) & 0x10) for read in samtools_read_plot if read[5] != "*"],
+					[int(read[1]) for read in samtools_read_plot if read[5] != "*"],
+					cur_bam_type,
 					ax[idx * 2 + 1], reference_buffer, region_center, region_chrom,
 					[read[0] for read in samtools_read_plot if read[5] != "*"],
 					read_names_vaf)

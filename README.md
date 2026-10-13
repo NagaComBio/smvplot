@@ -12,7 +12,7 @@ Install the package via pip
 ```
 $ smvplot --help
 usage: visualize.py [-h] --bam_paths STR --bam_names STR --ref FILE [--exclude_flag INT] [--map_quality INT] [--base_quality INT] [--max_depth_plot INT] [--vaf] [--for_gSmVs] [--vcf FILE] [--bed FILE] [--annotations FILE] [--annotation_names STR] [--prefix PREFIX] [--window N] [--samtoolsbin N] [--tabixbin N] [--plot_dir DIR] [--out_format STR] [--out_filename STR] [--ref_base STR] [--alt_base STR]
-                    [--sort_by_variant]
+                    [--sort_by_variant] [--bam_types STR] [--read_color_by STR] [--read_color_scheme STR]
                     [region]
 
 This script generates a png file for each entry in a vcf file, a bed file or a manually specified region.
@@ -46,6 +46,10 @@ optional arguments:
   --ref_base STR        Reference base for the variant entry, [default = ]
   --alt_base STR        Alternate base for the variant entry, [default = ]
   --sort_by_variant     Sort the reads based on the variant base
+  --bam_types STR       input list of BAM types (dna, rna, auto) separated by comma. Same length as BAM files or single value applied to all, [default = auto]
+  --read_color_by STR   How to color reads: auto (strand for DNA, pair for RNA), strand, pair, none, [default = auto]
+  --read_color_scheme STR
+                        Color scheme for reads: grey (monochrome shades) or igv (IGV red/blue strand colors), [default = grey]
 ```
 
 ### Example plots
@@ -91,6 +95,13 @@ smvplot \
   --vcf giab_benchmark_variants.vcf # --bed giab_benchmark_variants.vcf
 ```
 ### Changelog
+
+**0.3.0**
+- Feature: Added `--bam_types` (`dna`, `rna`, `auto`) with automatic RNA detection fallback based on spliced CIGARs (`N`), splice tags, and aligner headers.
+- Feature: Color reads in grey based on read strand for DNA (forward: `#c8c8c8`, reverse: `#707070`) and first/second-in-pair for RNA (R1: `#c8c8c8`, R2: `#707070`).
+- Feature: Added `--read_color_by` (`auto`, `strand`, `pair`, `none`) and `--read_color_scheme` (`grey`, `igv`).
+- Feature: Matched read arrowhead and tail notch colors to the exact read shade.
+- Bug fix: Fixed read metadata alignment (`reverses`, `flags`) during `--sort_by_variant`.
 
 **0.2.0**
 - Minor: Read sorting and VAF calculation for Multi-variant mode
