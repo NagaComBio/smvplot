@@ -102,6 +102,7 @@ smvplot \
 - Feature: Added `--read_color_by` (`auto`, `strand`, `pair`, `none`) and `--read_color_scheme` (`grey`, `igv`).
 - Feature: Matched read arrowhead and tail notch colors to the exact read shade.
 - Bug fix: Fixed read metadata alignment (`reverses`, `flags`) during `--sort_by_variant`.
+- Bug fix: Fixed `UnboundLocalError` for `region_chrom` when `--out_filename` is omitted.
 
 **0.2.0**
 - Minor: Read sorting and VAF calculation for Multi-variant mode

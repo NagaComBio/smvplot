@@ -834,11 +834,10 @@ def main():
 
 	os.makedirs(parsed_arguments.plot_dir, exist_ok = True)
 
-	if parsed_arguments.out_filename:
-		out_filename = "%s.%s" %(parsed_arguments.out_filename, parsed_arguments.out_format)
-	else:
-		out_filename = "%s_%s_%i.%s" %(parsed_arguments.prefix, region_chrom, region_center, parsed_arguments.out_format)
-
+	def get_plot_filename(chrom, center):
+		if parsed_arguments.out_filename:
+			return "%s.%s" % (parsed_arguments.out_filename, parsed_arguments.out_format)
+		return "%s_%s_%i.%s" % (parsed_arguments.prefix, chrom, center, parsed_arguments.out_format)
 
 	if parsed_arguments.region:
 
@@ -867,6 +866,7 @@ def main():
 
 		plot_region( region_chrom, region_center, region_left, region_right, plot_title )
 
+		out_filename = get_plot_filename(region_chrom, region_center)
 		plot_output_file = os.path.join(parsed_arguments.plot_dir, out_filename)
 		plot.savefig( plot_output_file )
 		plot.clf()
@@ -918,6 +918,7 @@ def main():
 					]
 
 				plot_region( region_chrom, region_center, region_left, region_right, plot_title, VAFs)
+				out_filename = get_plot_filename(region_chrom, region_center)
 				plot_output_file = os.path.join(parsed_arguments.plot_dir, out_filename)
 				plot.savefig( plot_output_file )
 				plot.clf()
@@ -940,6 +941,7 @@ def main():
 				plot_title = "%s:%s" % ( region_chrom, region_center )
 
 				plot_region( region_chrom, region_center, region_left, region_right, plot_title )
+				out_filename = get_plot_filename(region_chrom, region_center)
 				plot_output_file = os.path.join(parsed_arguments.plot_dir, out_filename)
 				plot.savefig( plot_output_file )
 				plot.clf()
