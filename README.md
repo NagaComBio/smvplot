@@ -49,7 +49,7 @@ optional arguments:
   --bam_types STR       input list of BAM types (dna, rna, auto) separated by comma. Same length as BAM files or single value applied to all, [default = auto]
   --read_color_by STR   How to color reads: auto (strand for DNA, pair for RNA), strand, pair, none, [default = auto]
   --read_color_scheme STR
-                        Color scheme for reads: grey (monochrome shades) or igv (IGV red/blue strand colors), [default = grey]
+                        Color scheme for reads: igv (pink/blue for strand, green/purple for pair) or grey (monochrome shades), [default = igv]
 ```
 
 ### Example plots
@@ -98,8 +98,10 @@ smvplot \
 
 **0.3.0**
 - Feature: Added `--bam_types` (`dna`, `rna`, `auto`) with automatic RNA detection fallback based on spliced CIGARs (`N`), splice tags, and aligner headers.
-- Feature: Color reads in grey based on read strand for DNA (forward: `#c8c8c8`, reverse: `#707070`) and first/second-in-pair for RNA (R1: `#c8c8c8`, R2: `#707070`).
-- Feature: Added `--read_color_by` (`auto`, `strand`, `pair`, `none`) and `--read_color_scheme` (`grey`, `igv`).
+- Feature: Distinct coloring for DNA strand vs RNA pair:
+  - **IGV scheme (`default`)**: DNA strand uses Pink (`#e69696`) / Blue (`#9696e6`); RNA pair uses Soft Green (`#88c999`, R1) / Soft Purple (`#b39ddb`, R2).
+  - **Grey scheme**: DNA strand uses Light Grey (`#c8c8c8`) / Dark Grey (`#707070`); RNA pair uses Cool Slate Grey (`#a0b0bc`, R1) / Dark Slate Grey (`#506070`, R2).
+- Feature: Added `--read_color_by` (`auto`, `strand`, `pair`, `none`) and `--read_color_scheme` (`igv`, `grey`).
 - Feature: Matched read arrowhead and tail notch colors to the exact read shade.
 - Bug fix: Fixed read metadata alignment (`reverses`, `flags`) during `--sort_by_variant`.
 - Bug fix: Fixed `UnboundLocalError` for `region_chrom` when `--out_filename` is omitted.

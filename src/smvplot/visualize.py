@@ -101,8 +101,9 @@ def get_args():
 			default='auto', choices=['auto', 'strand', 'pair', 'none'], required=False,
 			help='How to color reads: auto (strand for DNA, pair for RNA), strand, pair, none, [default = %(default)s]')
 	argument_parser.add_argument('--read_color_scheme', metavar='STR', type=str,
-			default='grey', choices=['grey', 'igv'], required=False,
-			help='Color scheme for reads: grey (monochrome shades) or igv (IGV red/blue strand colors), [default = %(default)s]')
+			default='igv', choices=['igv', 'grey'], required=False,
+			help='Color scheme for reads: igv (pink/blue for strand, green/purple for pair) or grey (monochrome shades), [default = %(default)s]')
+
 
 
 	parsed_arguments = argument_parser.parse_args()
@@ -564,18 +565,26 @@ def plot_cigars(cigars, sequences, reverses, flags, bam_type, ax, reference_func
 
 	# Determine color scheme palettes
 	if parsed_arguments.read_color_scheme == 'igv':
-		# IGV classic strand colors
-		col_fwd_or_r1 = "#e69696"   # Soft red / positive strand
-		col_rev_or_r2 = "#9696e6"   # Soft blue / negative strand
-		col_unpaired = "#aaaaaa"    # IGV neutral grey
-		col_none = "#aaaaaa"
+		# IGV scheme:
+		# DNA strand: Pink & Blue
+		col_dna_fwd = "#e69696"   # Soft pink / red (positive strand)
+		col_dna_rev = "#9696e6"   # Soft blue (negative strand)
+		# RNA pair: Green & Purple
+		col_rna_r1  = "#88c999"   # Soft green (first in pair R1)
+		col_rna_r2  = "#b39ddb"   # Soft purple / mauve (second in pair R2)
+		col_unpaired = "#aaaaaa"  # Neutral grey
+		col_none     = "#aaaaaa"
 		col_filtered = "#f0f0f0"
 	else:
-		# Grey shades
-		col_fwd_or_r1 = "#c8c8c8"   # Light grey
-		col_rev_or_r2 = "#707070"   # Dark grey
-		col_unpaired = "#a0a0a0"    # Neutral grey
-		col_none = "#c8c8c8"
+		# Grey shades:
+		# DNA strand: Light & Dark grey
+		col_dna_fwd = "#c8c8c8"   # Light grey
+		col_dna_rev = "#707070"   # Dark grey
+		# RNA pair: Cool slate & Dark slate
+		col_rna_r1  = "#a0b0bc"   # Cool slate grey
+		col_rna_r2  = "#506070"   # Dark slate grey
+		col_unpaired = "#a0a0a0"  # Neutral grey
+		col_none     = "#c8c8c8"
 		col_filtered = "#f0f0f0"
 
 	for cigar, sequence, reverse, flag, rname in zip(cigars_sorted, sequences_sorted, reverses_sorted, flags_sorted, read_names_sorted):
@@ -594,12 +603,12 @@ def plot_cigars(cigars, sequences, reverses, flags, bam_type, ax, reference_func
 			read_color = col_filtered
 		else:
 			if mode == 'strand':
-				read_color = col_rev_or_r2 if reverse else col_fwd_or_r1
+				read_color = col_dna_rev if reverse else col_dna_fwd
 			elif mode == 'pair':
 				if flag & 0x40:  # First in pair (R1)
-					read_color = col_fwd_or_r1
+					read_color = col_rna_r1
 				elif flag & 0x80:  # Second in pair (R2)
-					read_color = col_rev_or_r2
+					read_color = col_rna_r2
 				else:  # Single-end / unpaired
 					read_color = col_unpaired
 			else:  # 'none'
